@@ -32,33 +32,33 @@ ___
 
 ### Phase 1: 核心链路跑通 (MVP)
 
--   \[ \] 搭建 Go 基本目录结构 (`cmd`, `internal`, `pkg`)。
+-    搭建 Go 基本目录结构 (`cmd`, `internal`, `pkg`)。
     
--   \[ \] 实现 `pkg/pdf`：使用 `pdfcpu` 提取 PDF 的单页 `[]byte`。
+-    实现 `pkg/pdf`：使用 `pdfcpu` 提取 PDF 的单页 `[]byte`。
     
--   \[ \] 实现 `pkg/llm`：调用 Gemini API (采用最新的 `application/pdf` 直接上传模式)。
+-    实现 `pkg/llm`：调用 Gemini API (采用最新的 `application/pdf` 直接上传模式)。
     
--   \[ \] **目标**：一个 CLI 命令处理一个 PDF 并输出文本。
+-    **目标**：一个 CLI 命令处理一个 PDF 并输出文本。
     
 
 ### Phase 2: 并发调度 (The "Go" Power)
 
--   \[ \] 实现有界工作池 (`Worker Pool`)。
+-    实现有界工作池 (`Worker Pool`)。
     
--   \[ \] 引入 `golang.org/x/sync/errgroup` 处理并发错误捕获。
+-    引入 `golang.org/x/sync/errgroup` 处理并发错误捕获。
     
--   \[ \] 引入 `golang.org/x/time/rate` 实现令牌桶限流。
+-    引入 `golang.org/x/time/rate` 实现令牌桶限流。
     
--   \[ \] **目标**：能同时调用 N 个 API 处理长文档，速度提升 5-10 倍。
+-    **目标**：能同时调用 N 个 API 处理长文档，速度提升 5-10 倍。
     
 
 ### Phase 3: 异步化与持久化
 
--   \[ \] 集成 `Gin` 框架。
+-    集成 `Gin` 框架。
     
--   \[ \] 使用 Redis 存储任务状态 (`pending`, `processing`, `done`, `failed`)。
+-    使用 Redis 存储任务状态 (`pending`, `processing`, `done`, `failed`)。
     
--   \[ \] 实现结果的 MD5 缓存（秒传逻辑）。
+-    实现结果的 MD5 缓存（秒传逻辑）。
     
 
 ___
