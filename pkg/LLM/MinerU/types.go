@@ -37,9 +37,9 @@ type GetTaskResponse struct {
 		FullZipURL   string `json:"full_zip_url"`
 		ErrMsg       string `json:"err_msg"`
 		ProgressInfo struct {
-				ExtractedPages int    `json:"extracted_pages"`
-				StartTime      string `json:"start_time"`
-				TotalPages     int    `json:"total_pages"`
+			ExtractedPages int    `json:"extracted_pages"`
+			StartTime      string `json:"start_time"`
+			TotalPages     int    `json:"total_pages"`
 		} `json:"extract_progress"`
 	} `json:"data"`
 }
