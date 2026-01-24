@@ -31,15 +31,15 @@ type GetTaskResponse struct {
 	Msg     string `json:"msg"`
 	TraceID string `json:"trace_id"`
 	Data    struct {
-			TaskID       string `json:"task_id"`
-			DataID       string `json:"data_id"`
-			State        string `json:"state"`
-			FullZipURL   string `json:"full_zip_url"`
-			ErrMsg       string `json:"err_msg"`
-			ProgressInfo struct {
-					ExtractedPages int    `json:"extracted_pages"`
-					StartTime      string `json:"start_time"`
-					TotalPages     int    `json:"total_pages"`
-			} `json:"extract_progress"`
+		TaskID       string `json:"task_id"`
+		DataID       string `json:"data_id"`
+		State        string `json:"state"`
+		FullZipURL   string `json:"full_zip_url"`
+		ErrMsg       string `json:"err_msg"`
+		ProgressInfo struct {
+				ExtractedPages int    `json:"extracted_pages"`
+				StartTime      string `json:"start_time"`
+				TotalPages     int    `json:"total_pages"`
+		} `json:"extract_progress"`
 	} `json:"data"`
 }

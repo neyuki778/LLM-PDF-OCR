@@ -41,4 +41,22 @@ func main() {
 	}
 
 	fmt.Printf("task_id=%s\n", resp.Data.TaskID)
+
+	task_resp, err := client.GetTask(ctx, resp.Data.TaskID)
+	if err != nil {
+		log.Fatalf("get task failed: %v", err)
+	}
+
+	fmt.Printf("\n=== Task Status ===\n")
+	fmt.Printf("State: %s\n", task_resp.Data.State)
+	fmt.Printf("Progress: %d/%d pages\n",
+		task_resp.Data.ProgressInfo.ExtractedPages,
+		task_resp.Data.ProgressInfo.TotalPages)
+
+	switch task_resp.Data.State {
+	case "completed":
+		fmt.Printf("Result URL: %s\n", task_resp.Data.FullZipURL)
+	case "failed":
+		fmt.Printf("Error: %s\n", task_resp.Data.ErrMsg)
+	}
 }
