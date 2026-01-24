@@ -32,8 +32,17 @@ func main() {
     //     log.Fatal(err)
     // }
     // fmt.Println(result.Text())
-	filepath := "test/imgs/test.png"
-	AnalyzeImageInline(ctx, client, filepath)
+	
+	// 测试图片识别
+	// imgpath := "test/imgs/test.png"
+	// AnalyzeImageInline(ctx, client, imgpath)
+
+	// 测试pdf转换
+	pdfpath := "test/pdfs/期末-2022编译原理期末卷.pdf"
+	// AnalyzePDFInline(ctx, client, pdfpath)
+
+	// 测试上传pdf再抓换
+	AnalyzePDFByUpload(ctx, client, pdfpath)
 }
 
 func AnalyzeImageInline(ctx context.Context, client *genai.Client, filename string) {
@@ -69,4 +78,57 @@ func AnalyzeImageInline(ctx context.Context, client *genai.Client, filename stri
     }
     
     fmt.Println(resp.Text())
+}
+
+func AnalyzePDFInline(ctx context.Context, client *genai.Client, filename string) {
+    pdfBytes, err := os.ReadFile(filename)
+    if err!= nil {
+        log.Fatalf("读取文件失败: %v", err)
+    }
+
+	pdfPart := []*genai.Part{
+		&genai.Part{
+			InlineData: &genai.Blob{
+				MIMEType: "application/pdf",
+				Data: pdfBytes,
+			},
+		},
+		genai.NewPartFromText("识别pdf并转换成合适的markdown格式"),
+	}
+
+	contents := []*genai.Content{
+		genai.NewContentFromParts(pdfPart, genai.RoleUser),
+	}
+
+	result, _ := client.Models.GenerateContent(
+		ctx,
+		"gemini-3-flash-preview",
+        contents,
+        nil,
+	)
+
+	fmt.Printf(result.Text())
+}
+
+func AnalyzePDFByUpload(ctx context.Context, client *genai.Client, filename string) {
+	uploadConfig := &genai.UploadFileConfig{MIMEType: "application/pdf"}
+	uploadedFile, _ := client.Files.UploadFromPath(ctx, filename, uploadConfig)
+	fmt.Printf("PDF文件已上传, URL:%s", uploadedFile.URI)
+
+	pdfPart := []*genai.Part{
+		genai.NewPartFromURI(uploadedFile.URI, uploadedFile.MIMEType),
+		genai.NewPartFromText("识别pdf并转换成合适的markdown格式"),
+	}
+	contents := []*genai.Content{
+		genai.NewContentFromParts(pdfPart, genai.RoleUser),
+	}
+
+	result, _ := client.Models.GenerateContent(
+		ctx,
+		"gemini-3-flash-preview",
+        contents,
+        nil,
+	)
+
+	fmt.Printf(result.Text())
 }
