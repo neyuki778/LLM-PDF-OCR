@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/neyuki778/LLM-PDF-OCR/pkg/result"
+	result "github.com/neyuki778/LLM-PDF-OCR/pkg/result"
 )
 
 // ProcessTask 一站式处理：等待任务完成 + 下载 + 提取内容

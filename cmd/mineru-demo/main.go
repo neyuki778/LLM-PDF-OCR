@@ -40,23 +40,25 @@ func main() {
 		log.Fatalf("create task failed: %v", err)
 	}
 
-	fmt.Printf("task_id=%s\n", resp.Data.TaskID)
+	fmt.Printf("Task created: %s\n", resp.Data.TaskID)
+	fmt.Println("Waiting for completion and extracting content...")
 
-	task_resp, err := client.GetTask(ctx, resp.Data.TaskID)
+	// 使用一站式方法：等待 + 下载 + 提取
+	content, err := client.ProcessTask(ctx, resp.Data.TaskID)
 	if err != nil {
-		log.Fatalf("get task failed: %v", err)
+		log.Fatalf("process task failed: %v", err)
 	}
 
-	fmt.Printf("\n=== Task Status ===\n")
-	fmt.Printf("State: %s\n", task_resp.Data.State)
-	fmt.Printf("Progress: %d/%d pages\n",
-		task_resp.Data.ProgressInfo.ExtractedPages,
-		task_resp.Data.ProgressInfo.TotalPages)
+	fmt.Println("\n=== Extraction Complete ===")
+	fmt.Printf("Markdown length: %d bytes\n", len(content.Markdown))
+	fmt.Printf("Layout JSON length: %d bytes\n", len(content.LayoutJSON))
+	fmt.Printf("Source PDF length: %d bytes\n", len(content.SourcePDF))
 
-	switch task_resp.Data.State {
-	case "completed":
-		fmt.Printf("Result URL: %s\n", task_resp.Data.FullZipURL)
-	case "failed":
-		fmt.Printf("Error: %s\n", task_resp.Data.ErrMsg)
+	// 打印 Markdown 内容预览（前 500 字符）
+	fmt.Println("\n=== Markdown Preview ===")
+	preview := content.Markdown
+	if len(preview) > 500 {
+		preview = preview[:500] + "..."
 	}
+	fmt.Println(preview)
 }
