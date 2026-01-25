@@ -38,11 +38,14 @@ func main() {
 	// AnalyzeImageInline(ctx, client, imgpath)
 
 	// 测试pdf转换
-	pdfpath := "test/pdfs/期末-2022编译原理期末卷.pdf"
+	// pdfpath := "test/pdfs/期末-2022编译原理期末卷.pdf"
 	// AnalyzePDFInline(ctx, client, pdfpath)
 
 	// 测试上传pdf再抓换
-	AnalyzePDFByUpload(ctx, client, pdfpath)
+	// AnalyzePDFByUpload(ctx, client, pdfpath)
+
+	// 测试流式传输
+	StreamResponse(ctx, client)
 }
 
 func AnalyzeImageInline(ctx context.Context, client *genai.Client, filename string) {
@@ -131,4 +134,26 @@ func AnalyzePDFByUpload(ctx context.Context, client *genai.Client, filename stri
 	)
 
 	fmt.Printf(result.Text())
+}
+
+func StreamResponse(ctx context.Context, client *genai.Client) {
+    iter := client.Models.GenerateContentStream(ctx, "gemini-2.5-flash", genai.Text("写一首关于Go语言的长诗。(我在做流式传输测试)"), nil)
+
+	// Go 1.23+ 风格迭代
+    // 如果使用旧版本Go，这里会有不同的写法，但SDK设计倾向于新标准
+    for resp, err := range iter {
+        if err!= nil {
+            log.Printf("流传输错误: %v", err)
+            break
+        }
+        // 实时打印每个分块（Chunk）的文本
+        // fmt.Print(resp.Text()) 
+		currText := resp.Text()
+
+		for _, char := range currText {
+			fmt.Print(string(char))
+			time.Sleep(15 * time.Millisecond)
+		}
+    }
+    fmt.Println() // 换行
 }
