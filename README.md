@@ -1,91 +1,143 @@
 # LLM-PDF-OCR
 
-本项目是一个高性能 PDF OCR 服务。 **核心逻辑**：大(多) PDF → 逻辑切分 → 并发请求 Gemini API → Markdown 聚合。
+基于 Go + 多模态LLM 的高性能 PDF 转 Markdown 服务，通过分片并发处理突破大文件限制。
 
-## 🛠 技术选型
+## 💡 项目初衷
 
--   **Go 1.22+**：利用高效的协程和 `Context` 治理。
-    
--   **Gemini 3 Flash**：支持直接上传 PDF，处理速度极快且成本低。
-    
--   **pdfcpu / go-pdfium**：用于本地快速切分 PDF 页面。
-    
--   **Redis (Task Queue)**：处理异步状态和结果缓存。
-    
+### 为什么做这个项目？
 
-## 🏗 核心架构流
+1. **Markdown 比 PDF 更适合阅读和处理**
+   - 对人类：支持全文检索、版本控制、直接编辑
+   - 对 LLM：纯文本格式减少 token 消耗，上下文理解更准确
 
-1.  **API 层**：接收上传，生成 `task_id`，丢入队列。
-    
-2.  **切分层 (Sharding)**：将大 PDF 物理/逻辑切分为单页。
-    
-3.  **调度层 (Worker Pool)**：控制并发数（防止 OOM 和 API 限流）。
-    
-4.  **API 层 (LLM)**：调用 Gemini 进行 OCR 识别。
-    
-5.  **存储层**：结果暂存 Redis，状态通过 Webhook 或轮询返回。
-    
+2. **绕过 Web 端和 API 的大文件限制**
+   - Gemini Web UI 单文件限制约 50MB，无法处理长文档
+   - 官方 API 虽支持 1000 页，但单次请求耗时长、易超时
 
-___
+3. **上下文无关的分片策略更经济**
+   - OCR 任务天然适合分片：每页识别互不依赖
+   - 分片后单请求 token 消耗更少，成本更低
+   - 失败时只需重试单个分片，不必重跑全文
 
-## 📅 开发计划 (Milestones)
+4. **充分利用并发提升效率**
+   - 100 页 PDF：串行需 100 秒，5 worker 并发仅需 20 秒
+   - Worker Pool 模式充分榨取 API 配额，实测效率(计划中)
 
-### Phase 1: 核心链路跑通 (MVP)
+## 🏗 系统架构
 
--    搭建 Go 基本目录结构 (`cmd`, `internal`, `pkg`)。
-    
--    实现 `pkg/pdf`：使用 `pdfcpu` 提取 PDF 的单页 `[]byte`。
-    
--    实现 `pkg/llm`：调用 Gemini API (采用最新的 `application/pdf` 直接上传模式)。
-    
--    **目标**：一个 CLI 命令处理一个 PDF 并输出文本。
-    
+### 核心流程
 
-### Phase 2: 并发调度 (The "Go" Power)
+```
+用户上传 PDF
+    ↓
+分片处理（5页/片）
+    ↓
+任务队列 (buffered channel)
+    ↓
+Worker Pool (5 workers)
+    ├─ Worker 1 → Gemini API → 分片结果1
+    ├─ Worker 2 → Gemini API → 分片结果2
+    └─ ...
+    ↓
+聚合器（按页码排序）
+    ↓
+输出 Markdown 文件
+```
 
--    实现有界工作池 (`Worker Pool`)。
-    
--    引入 `golang.org/x/sync/errgroup` 处理并发错误捕获。
-    
--    引入 `golang.org/x/time/rate` 实现令牌桶限流。
-    
--    **目标**：能同时调用 N 个 API 处理长文档，速度提升 5-10 倍。
-    
+### 技术栈
 
-### Phase 3: 异步化与持久化
+-   **Go 1.25+**：原生并发支持，高效的 goroutine 和 channel
+-   **Gemini 3 Flash**：直接支持 PDF 上传，处理速度快、成本低
+-   **pdfcpu**：纯 Go 实现的 PDF 处理库，无需 C 依赖
+-   **golang.org/x/time/rate**：令牌桶限流器，精确控制 API 调用频率
 
--    集成 `Gin` 框架。
-    
--    使用 Redis 存储任务状态 (`pending`, `processing`, `done`, `failed`)。
-    
--    实现结果的 MD5 缓存（秒传逻辑）。
-    
+### 关键设计
 
-___
+#### 两层任务模型
 
-## 📂 极简目录
+```go
+ParentTask (用户视角)
+  ├─ ID: task_abc
+  ├─ 状态: pending → processing → completed
+  ├─ 进度: 15/20 (已完成/总分片数)
+  └─ 结果: output/task_abc.md
 
-Plaintext
+SubTask (内部实现)
+  ├─ 对应 PDF 的一个分片（如第1-5页）
+  ├─ 完全并发执行，无顺序依赖
+  └─ 聚合时按页码排序
+```
+
+#### Worker Pool 并发控制
+
+- **固定 worker 数量**：5 个 goroutine 并发处理
+- **有界任务队列**：容量 100，防止内存爆炸
+- **Rate Limiter**：精确控制 API QPM，避免触发限流
+- **优雅重试**：单片失败最多重试 3 次，指数退避
+
+#### 错误处理策略
+
+- **部分失败容忍**：某个分片失败 3 次后跳过，用错误信息占位
+- **结果完整性优先**：返回不完整但可用的 Markdown（标注缺失页码）
+- **实时进度反馈**：`GET /tasks/{id}` 返回 `completed: 15, failed: 2, total: 20`
+
+## 📂 项目结构
 
 ```bash
 .
-├── cmd/server/main.go      # 程序入口
+├── cmd/
+│   ├── gemini-demo/        # Gemini API 功能演示
+│   ├── mineru-demo/        # MinerU 集成示例
+│   └── server/             # HTTP 服务入口（开发中）
 ├── internal/
-│   ├── worker/             # 核心：并发调度逻辑 (Worker Pool)
-│   ├── service/            # 业务：OCR 处理流水线
-│   └── store/              # 存储：Redis 交互
+│   ├── task/               # 任务管理 (ParentTask/SubTask)
+│   ├── worker/             # Worker Pool 实现
+│   └── aggregator/         # 结果聚合器
 ├── pkg/
-│   ├── pdf/                # 工具：PDF 拆分封装
-│   └── gemini/             # 适配：Gemini API Client
-└── .env                    # 配置：API_KEY, REDIS_ADDR
+│   ├── pdf/                # PDF 分片工具
+│   ├── LLM/gemini/         # Gemini SDK 封装
+│   └── result/             # 结果处理工具
+└── output/                 # Markdown 输出目录
 ```
 
-___
+## 🚀 快速开始
 
-## 📝 开发备忘录 (Interview Points)
+### 环境配置
 
--   **为什么切分？** 虽然 Gemini 支持 1000 页，但并发调用 1000 个单页请求比等一个 1000 页的请求快得多，且能实现页级别的重试。
-    
--   **限流策略**：Gemini 2.5 Flash 免费层级有限制，代码中必须有严格的速率控制。
-    
--   **内存安全**：处理大文件时，尽量使用 `io.Reader` 流式传递，避免一次性读入整个 PDF 到内存。
+创建 `.env` 文件：
+```bash
+GEMINI_API_KEY=your_api_key_here
+```
+
+### 运行示例
+
+```bash
+# 安装依赖
+go mod download
+
+# 运行 Gemini 演示
+go run ./cmd/gemini-demo/main.go
+
+# 运行服务（开发中）
+go run ./cmd/server/main.go
+```
+
+## 🎯 开发路线图
+
+- [x] **Phase 1**: 基础 PDF 处理和 Gemini API 集成
+- [x] **Phase 2**: PDF 分片功能
+- [ ] **Phase 3**: Worker Pool 并发调度（进行中）
+- [ ] **Phase 4**: HTTP API 服务
+- [ ] **Phase 5**: LRU 缓存和文件管理
+
+## 📊 性能优势 (计划中)
+
+
+*测试环境：Gemini 2.5 Flash，平均单页处理 1 秒*
+
+## 🔧 技术亮点
+
+- **零依赖部署**：纯 Go 实现，编译为单一二进制文件
+- **内存安全**：流式处理 PDF，避免大文件一次性加载
+- **可观测性**：实时任务进度、详细错误日志
+- **弹性设计**：部分失败不阻塞整体结果输出
