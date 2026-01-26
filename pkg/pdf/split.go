@@ -25,3 +25,7 @@ func SplitPDF(ctx context.Context, inputPath, outputDir string, span int) error 
 	}
 	return err
 }
+
+func GetPageCount (pdfPath string) (int, error) {
+	return api.PageCountFile(pdfPath)
+}
