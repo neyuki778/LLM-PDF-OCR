@@ -68,3 +68,7 @@ func (wp *WorkerPool) Shutdown() {
 	wp.wg.Wait()
 	close(wp.resultChan)
 }
+
+func (wp *WorkerPool) ResultChan() <-chan *CompletionSignal {
+    return wp.resultChan
+}
