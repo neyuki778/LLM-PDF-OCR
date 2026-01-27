@@ -74,9 +74,7 @@ func (tm *TaskManager) handleResult(signal *worker.CompletionSignal) error {
 	}
 
 	if parentTask.IsAllDone() {
-		if err := parentTask.Aggregate(); err != nil {
-			return err
-		}
+		go parentTask.Aggregate()
 	}
 	return nil
 }

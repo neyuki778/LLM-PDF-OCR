@@ -10,7 +10,8 @@ import (
 
 const (
 	ModelName = "gemini-3-flash-preview"
-	Prompt    = "识别pdf并转换成合适的markdown格式"
+	// Prompt    = "识别pdf并转换成合适的markdown格式, 除了PDF内容外不要有任何额外的语句, 保持PDF原本的语言, 不要擅自翻译"
+	Prompt = "Extract the PDF content and convert it into a clean Markdown format. Output only the content of the PDF without any additional commentary or preamble. Maintain the original language of the document; do not translate."
 )
 
 // ProcessPDF 读取本地 PDF 并调用 Gemini OCR，返回 Markdown 内容
