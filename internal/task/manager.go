@@ -105,11 +105,11 @@ func (tm *TaskManager) CreateTask(pdfPath string) (taskID string, err error) {
 
 		subTaskID := fmt.Sprintf("%s_%d", taskID, i+1)
 
-		splitPath := filepath.Join(workDir, fmt.Sprintf("%s_%d.pdf", nameWithoutExt, i+1))
-		tempFilePath := filepath.Join(workDir, fmt.Sprintf("page_%d.md", i+1))
+		pageStart := i*span + 1
+		pageEnd := min((i+1)*span, totalPages)
 
-		pageStart := i * span + 1
-		pageEnd := min((i + 1) * span, totalPages)
+		splitPath := filepath.Join(workDir, fmt.Sprintf("%s_%d-%d.pdf", nameWithoutExt, pageStart, pageEnd))
+		tempFilePath := filepath.Join(workDir, fmt.Sprintf("page_%d.md", i+1))
 
 		meta := SubTaskMeta{
 			ID: subTaskID,
@@ -163,4 +163,30 @@ func (tm *TaskManager) SubmitTaskToPool(taskID string, timeout time.Duration) er
 																													
 	parentTask.Status = StatusProcessing                                                                         
 	return nil                                                                                                   
+}
+
+func (tm *TaskManager) WaitForTask(taskID string, timeout time.Duration) error {
+	tm.mu.RLock()
+	parentTask ,exists := tm.tasks[taskID]
+	tm.mu.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("task not found: %s", taskID)
+	}
+
+	ddl := time.After(timeout)
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <- ddl:
+			return fmt.Errorf("timeout waiting for task %s", taskID)
+		case <- ticker.C:
+			if parentTask.Status == StatusCompleted {
+				return nil
+			}
+		}
+	}
+
 }
