@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	worker "github.com/neyuki778/LLM-PDF-OCR/internal/worker"
@@ -47,7 +48,9 @@ func (tm *TaskManager) ListenResult() error {
 				return fmt.Errorf("Something wrong with ResultChan!")
 			}
 			err := tm.handleResult(signal)
-			return fmt.Errorf("Wrong: %e", err)
+			if err != nil {
+				return fmt.Errorf("Wrong: %e", err)
+			}
 		case <-tm.stopChan:
 			return nil
 		}
@@ -132,4 +135,32 @@ func (tm *TaskManager) CreateTask(pdfPath string) (taskID string, err error) {
 	tm.mu.Unlock()
 
 	return taskID, nil
+}
+
+func (tm *TaskManager) SubmitTaskToPool(taskID string, timeout time.Duration) error {                              
+	tm.mu.RLock()                                                                                                
+	parentTask, exists := tm.tasks[taskID]                                                                       
+	tm.mu.RUnlock()                                                                                              
+																													
+	if !exists {                                                                                                 
+		return fmt.Errorf("task not found: %s", taskID)                                                      
+	}                                                                                                            
+																													
+	for _, subTask := range parentTask.SubTasks {                                                                
+		workerTask := &worker.SubTask{                                                                       
+			ID:         subTask.ID,                                                                      
+			ParentID:   taskID,                                                                          
+			PDFPath:    subTask.SplitPDFPath,                                                            
+			OutputPath: subTask.TempFilePath,                                                            
+			PageStart:  subTask.PageStart,                                                               
+			PageEnd:    subTask.PageEnd,                                                                 
+		}                                                                                                    
+																												
+		if err := tm.pool.Submit(workerTask, timeout); err != nil {                                          
+			return fmt.Errorf("failed to submit subtask %s: %w", subTask.ID, err)                        
+		}                                                                                                    
+	}                                                                                                            
+																													
+	parentTask.Status = StatusProcessing                                                                         
+	return nil                                                                                                   
 }
