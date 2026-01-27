@@ -10,7 +10,8 @@ import (
 type SubTask struct {
 	ID         string // 分片唯一ID                                                                                   
 	ParentID   string // 所属父任务ID                                                                                 
-	PDFPath    string // 分片PDF文件路径                                                                              
+	PDFPath    string // 分片PDF文件路径    
+	OutputPath string                                                                          
 	PageStart  int    // 起始页码                                                                                     
 	PageEnd    int    // 结束页码                                                                                     
 	RetryCount int    // 当前重试次数                                                                                 

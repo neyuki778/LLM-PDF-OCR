@@ -71,13 +71,13 @@ func (tm *TaskManager) handleResult(signal *worker.CompletionSignal) error {
 	}
 
 	if parentTask.IsAllDone() {
-		// to do
+		go parentTask.Aggregate()
 	}
 	return nil
 }
 
 // 完整的任务创建功能, 包含pdf切分
-func (tm *TaskManager) CreatTask(pdfPath string) (taskID string, err error) {
+func (tm *TaskManager) CreateTask(pdfPath string) (taskID string, err error) {
 	taskID = uuid.New().String()
 	workDir := filepath.Join("./output/", taskID)
 
