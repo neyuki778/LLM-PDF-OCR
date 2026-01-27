@@ -34,6 +34,9 @@ func main() {
 		log.Fatalf("Failed to submit: %v", err)
 	}
 	fmt.Println("Processing...") 
+	if err := tm.WaitForTask(taskID, 5*time.Minute); err != nil {
+		log.Fatalf("Failed while waiting: %v", err)
+	}
 
 	fmt.Printf("Done! Output: ./output/%s/result.md\n", taskID)
 }

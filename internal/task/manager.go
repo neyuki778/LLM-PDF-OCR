@@ -74,7 +74,9 @@ func (tm *TaskManager) handleResult(signal *worker.CompletionSignal) error {
 	}
 
 	if parentTask.IsAllDone() {
-		go parentTask.Aggregate()
+		if err := parentTask.Aggregate(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -94,7 +96,7 @@ func (tm *TaskManager) CreateTask(pdfPath string) (taskID string, err error) {
 	}
 
 	// 目前固定每个PDF最大为5页
-	span := 5
+	span := 2
 	totalShards := (totalPages + span - 1) / span
 
 	parentTask := NewParentTask(taskID, pdfPath, workDir)
@@ -108,7 +110,11 @@ func (tm *TaskManager) CreateTask(pdfPath string) (taskID string, err error) {
 		pageStart := i*span + 1
 		pageEnd := min((i+1)*span, totalPages)
 
-		splitPath := filepath.Join(workDir, fmt.Sprintf("%s_%d-%d.pdf", nameWithoutExt, pageStart, pageEnd))
+		splitFileName := fmt.Sprintf("%s_%d-%d.pdf", nameWithoutExt, pageStart, pageEnd)
+		if span == 1 {
+			splitFileName = fmt.Sprintf("%s_%d.pdf", nameWithoutExt, i+1)
+		}
+		splitPath := filepath.Join(workDir, splitFileName)
 		tempFilePath := filepath.Join(workDir, fmt.Sprintf("page_%d.md", i+1))
 
 		meta := SubTaskMeta{
