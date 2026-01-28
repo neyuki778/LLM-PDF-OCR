@@ -119,9 +119,17 @@ SubTask (内部实现)
 
 ### 环境配置
 
-创建 `.env` 文件：
+支持 `.env` 或手动导出环境变量，服务启动时会读取以下配置：
 ```bash
 GEMINI_API_KEY=your_api_key_here
+LLM_PROVIDER=gemini
+GEMINI_MODEL=gemini-3-flash-preview
+
+# MinerU（仅在 LLM_PROVIDER=mineru 时需要）
+PublicURL=your_domain
+MINERU_TOKEN=your_token_here
+MINERU_BASE_URL=https://mineru.net
+MINERU_MODEL_VERSION=vlm
 ```
 
 ### 运行示例
