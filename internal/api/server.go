@@ -42,7 +42,7 @@ func (s *Server) setupRoutes() {
 	s.router.StaticFile("/", "./web/index.html")
 	s.router.StaticFile("/style.css", "./web/style.css")
 	s.router.Static("/dist", "./web/dist")
-	s.router.Static("/uploads", "./uploads") // 暴露 PDF 文件供 LLM-API 提供商访问
+	s.router.Static("/output", "./output")   // 暴露分片后的 PDF 供 LLM-API 提供商拉取
 }
 
 // Run 启动 HTTP 服务

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/neyuki778/LLM-PDF-OCR/pkg/result"
@@ -121,9 +122,15 @@ func (c *Client) WaitForCompletion(ctx context.Context, taskID string) (*GetTask
 // pdfPath 是本地文件路径，如 uploads/xxx.pdf
 func (c *Client) ProcessPDF(ctx context.Context, pdfPath string) (string, error) {
 	// 1. 将本地路径转换为公开 URL
-	// pdfPath 格式: uploads/xxx.pdf -> https://yourdomain.com/uploads/xxx.pdf
-	filename := filepath.Base(pdfPath)
-	pdfURL := c.PublicURL + "/uploads/" + filename
+	// pdfPath 格式: output/<task_id>/xxx.pdf -> https://yourdomain.com/output/<task_id>/xxx.pdf
+	cleanPath := filepath.Clean(pdfPath)
+	outputPrefix := filepath.Clean("output") + string(os.PathSeparator)
+	if !strings.HasPrefix(cleanPath, outputPrefix) {
+		return "", fmt.Errorf("pdf path must be under output/: %s", pdfPath)
+	}
+	relative := strings.TrimPrefix(cleanPath, outputPrefix)
+	publicBase := strings.TrimRight(c.PublicURL, "/")
+	pdfURL := publicBase + "/output/" + filepath.ToSlash(relative)
 
 	// 2. 创建 MinerU 任务
 	createResp, err := c.CreateTask(ctx, CreateTaskRequest{
