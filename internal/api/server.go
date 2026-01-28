@@ -26,16 +26,22 @@ func NewServer(tm *task.TaskManager) *Server {
 
 // setupRoutes 注册所有路由
 func (s *Server) setupRoutes() {
+	// API 路由
 	api := s.router.Group("/api")
 	{
 		// Phase 4.1
-		api.POST("/tasks", s.createTask)           // 上传 PDF，创建任务
-		api.GET("/tasks/:id", s.getTask)           // 查询任务状态
+		api.POST("/tasks", s.createTask)          // 上传 PDF，创建任务
+		api.GET("/tasks/:id", s.getTask)          // 查询任务状态
 
 		// Phase 4.2
-		api.GET("/tasks/:id/result", s.getResult)  // 下载结果
-		api.DELETE("/tasks/:id", s.deleteTask)     // 删除任务
+		api.GET("/tasks/:id/result", s.getResult) // 下载结果
+		api.DELETE("/tasks/:id", s.deleteTask)    // 删除任务
 	}
+
+	// 静态文件服务
+	s.router.StaticFile("/", "./web/index.html")
+	s.router.StaticFile("/style.css", "./web/style.css")
+	s.router.Static("/dist", "./web/dist")
 }
 
 // Run 启动 HTTP 服务
