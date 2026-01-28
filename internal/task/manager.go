@@ -92,8 +92,12 @@ func (tm *TaskManager) CreateTask(pdfPath string) (taskID string, err error) {
 	if err != nil {
 		return taskID, err
 	}
+	maxPageCount := 30
+	if totalPages >= maxPageCount {
+		return "", fmt.Errorf("Total pages: %d should less than %d", totalPages, maxPageCount)
+	}
 
-	// 目前固定每个PDF最大为5页
+	// 目前固定每个PDF最大2页
 	span := 2
 	totalShards := (totalPages + span - 1) / span
 
