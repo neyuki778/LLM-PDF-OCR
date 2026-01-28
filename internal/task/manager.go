@@ -118,8 +118,8 @@ func (tm *TaskManager) CreateTask(pdfPath string) (taskID string, err error) {
 		pageEnd := min((i+1)*span, totalPages)
 
 		splitFileName := fmt.Sprintf("%s_%d-%d.pdf", nameWithoutExt, pageStart, pageEnd)
-		if span == 1 {
-			splitFileName = fmt.Sprintf("%s_%d.pdf", nameWithoutExt, i+1)
+		if pageStart == pageEnd {
+			splitFileName = fmt.Sprintf("%s_%d.pdf", nameWithoutExt, pageStart)
 		}
 		splitPath := filepath.Join(workDir, splitFileName)
 		tempFilePath := filepath.Join(workDir, fmt.Sprintf("page_%d.md", i+1))
