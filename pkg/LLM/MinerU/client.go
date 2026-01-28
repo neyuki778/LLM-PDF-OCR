@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -29,7 +30,7 @@ func NewClient(baseURL, token, publicURL string) *Client {
 		BaseURL:   baseURL,
 		Token:     token,
 		PublicURL: publicURL,
-		HTTP:      &http.Client{Timeout: 20 * time.Second},
+		HTTP:      &http.Client{Timeout: 60 * time.Second},
 	}
 }
 
@@ -131,6 +132,7 @@ func (c *Client) ProcessPDF(ctx context.Context, pdfPath string) (string, error)
 	relative := strings.TrimPrefix(cleanPath, outputPrefix)
 	publicBase := strings.TrimRight(c.PublicURL, "/")
 	pdfURL := publicBase + "/output/" + filepath.ToSlash(relative)
+	log.Printf("MinerU PDF URL: %s", pdfURL)
 
 	// 2. 创建 MinerU 任务
 	createResp, err := c.CreateTask(ctx, CreateTaskRequest{
