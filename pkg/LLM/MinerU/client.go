@@ -6,20 +6,29 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
+
+	"github.com/neyuki778/LLM-PDF-OCR/pkg/result"
 )
 
 type Client struct {
-	BaseURL string
-	Token   string
-	HTTP    *http.Client
+	BaseURL   string       // MinerU API 地址，如 https://mineru.net
+	Token     string       // MinerU API Token
+	PublicURL string       // 本服务的公开地址，如 https://yourdomain.com
+	HTTP      *http.Client
 }
 
-func NewClient(baseURL, token string) *Client {
+func NewClient(baseURL, token, publicURL string) *Client {
+	if baseURL == "" {
+		baseURL = "https://mineru.net"
+	}
 	return &Client{
-		BaseURL: baseURL,
-		Token:   token,
-		HTTP:    &http.Client{Timeout: 20 * time.Second},
+		BaseURL:   baseURL,
+		Token:     token,
+		PublicURL: publicURL,
+		HTTP:      &http.Client{Timeout: 20 * time.Second},
 	}
 }
 
@@ -106,4 +115,44 @@ func (c *Client) WaitForCompletion(ctx context.Context, taskID string) (*GetTask
 			}
 		}
 	}
+}
+
+// ProcessPDF 实现 PDFProcessor 接口
+// pdfPath 是本地文件路径，如 uploads/xxx.pdf
+func (c *Client) ProcessPDF(ctx context.Context, pdfPath string) (string, error) {
+	// 1. 将本地路径转换为公开 URL
+	// pdfPath 格式: uploads/xxx.pdf -> https://yourdomain.com/uploads/xxx.pdf
+	filename := filepath.Base(pdfPath)
+	pdfURL := c.PublicURL + "/uploads/" + filename
+
+	// 2. 创建 MinerU 任务
+	createResp, err := c.CreateTask(ctx, CreateTaskRequest{
+		URL:          pdfURL,
+		ModelVersion: "vlm",
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to create mineru task: %w", err)
+	}
+
+	// 3. 等待任务完成
+	taskResp, err := c.WaitForCompletion(ctx, createResp.Data.TaskID)
+	if err != nil {
+		return "", fmt.Errorf("failed to wait for mineru task: %w", err)
+	}
+
+	// 4. 下载结果 ZIP
+	tempDir := os.TempDir()
+	zipPath := filepath.Join(tempDir, createResp.Data.TaskID+".zip")
+	if err := result.DownloadZip(ctx, taskResp.Data.FullZipURL, zipPath); err != nil {
+		return "", fmt.Errorf("failed to download result: %w", err)
+	}
+	defer os.Remove(zipPath)
+
+	// 5. 提取 Markdown 内容
+	markdown, err := result.ExtractMarkdown(zipPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to extract markdown: %w", err)
+	}
+
+	return markdown, nil
 }
