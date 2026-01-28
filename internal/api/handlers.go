@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/neyuki778/LLM-PDF-OCR/internal/task"
 )
 
@@ -39,8 +40,9 @@ func (s *Server) createTask(c *gin.Context) {
 		return
 	}
 
-	// 4. 保存文件到服务器
-	savePath := filepath.Join(uploadDir, file.Filename)
+	// 4. 用 UUID 作为文件名保存，避免冲突
+	fileID := uuid.New().String()
+	savePath := filepath.Join(uploadDir, fileID+".pdf")
 	if err := c.SaveUploadedFile(file, savePath); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to save file",

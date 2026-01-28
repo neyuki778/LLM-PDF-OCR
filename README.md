@@ -127,13 +127,7 @@ GEMINI_API_KEY=your_api_key_here
 ### 运行示例
 
 ```bash
-# 安装依赖
-go mod download
-
-# 编译前端（首次运行需要）
-cd web && pnpm install && pnpm build && cd ..
-
-# 启动服务（含 Web 界面）
+# 启动服务（含 Web 界面）(确保服务器上已经安装了golang)
 go run ./cmd/server/main.go
 # 访问 http://localhost:8080
 
