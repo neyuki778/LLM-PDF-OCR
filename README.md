@@ -90,6 +90,11 @@ SubTask (内部实现)
 │   ├── mineru-demo/        # MinerU 集成示例
 │   ├── pdf-demo/           # PDF 分片演示
 │   └── server/             # HTTP 服务入口
+├── web/                    # 前端界面 (TypeScript)
+│   ├── index.html          # 单页面入口
+│   ├── style.css           # Apple 风格样式
+│   ├── src/main.ts         # TypeScript 源码
+│   └── dist/main.js        # 编译输出
 ├── internal/
 │   ├── api/                # HTTP API 层 (Gin)
 │   │   ├── server.go       # Server: Gin 引擎初始化、路由注册
@@ -125,16 +130,16 @@ GEMINI_API_KEY=your_api_key_here
 # 安装依赖
 go mod download
 
-# 处理 PDF 文件（完整流程）
+# 编译前端（首次运行需要）
+cd web && pnpm install && pnpm build && cd ..
+
+# 启动服务（含 Web 界面）
+go run ./cmd/server/main.go
+# 访问 http://localhost:8080
+
+# 处理 PDF 文件（命令行模式）
 go run ./cmd/ocr-demo/main.go ./path/to/your.pdf
 # 输出：./output/{task_id}/result.md
-
-# 运行 Gemini API 演示
-go run ./cmd/gemini-demo/main.go
-
-# 运行服务
-go run ./cmd/server/main.go
-# 服务启动于 :8080
 ```
 
 ## 🎯 开发路线图
@@ -142,7 +147,7 @@ go run ./cmd/server/main.go
 - [x] **Phase 1**: 基础 PDF 处理和 Gemini API 集成
 - [x] **Phase 2**: PDF 分片功能
 - [x] **Phase 3**: Worker Pool 并发调度 + TaskManager
-- [ ] **Phase 4**: HTTP API 服务 (进行中)
+- [x] **Phase 4**: HTTP API 服务 + Web 前端
 - [ ] **Phase 5**: LRU 缓存和文件管理
 
 ## 🌐 HTTP API
