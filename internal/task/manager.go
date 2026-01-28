@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	worker "github.com/neyuki778/LLM-PDF-OCR/internal/worker"
+	llm "github.com/neyuki778/LLM-PDF-OCR/pkg/LLM"
 	pdf "github.com/neyuki778/LLM-PDF-OCR/pkg/pdf"
 )
 
@@ -26,12 +27,16 @@ type TaskManager struct {
 	stopChan chan struct{} // 用于停止监听器
 }
 
-func NewTaskManager(workCount int) *TaskManager {
-	return &TaskManager{
-		tasks: make(map[string]*ParentTask),
-		pool: worker.NewWorkerPool(workCount),
-		stopChan: make(chan struct{}),
+func NewTaskManager(workCount int, config llm.Config) (*TaskManager, error) {
+	processor, err := llm.NewProcessor(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create processor: %w", err)
 	}
+	return &TaskManager{
+		tasks:    make(map[string]*ParentTask),
+		pool:     worker.NewWorkerPool(workCount, processor),
+		stopChan: make(chan struct{}),
+	}, nil
 }
 
 func (tm *TaskManager) Start() error {

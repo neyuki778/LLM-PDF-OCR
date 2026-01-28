@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"google.golang.org/genai"
+	llm "github.com/neyuki778/LLM-PDF-OCR/pkg/LLM"
 )
 
 type SubTask struct {
@@ -29,7 +29,7 @@ type WorkerPool struct {
 	workerCount  int                      // worker数量（固定5）                                                      
 	taskQueue    chan *SubTask            // 任务队列（容量100）                                                      
 	resultChan   chan *CompletionSignal   // 结果通道（容量10）                                                       
-	geminiClient *genai.Client            // Gemini API客户端                                                         
+	processor	 llm.PDFProcessor         // Gemini API客户端                                                         
 	ctx          context.Context          // 上下文                                                                   
 	cancel       context.CancelFunc       // 取消函数                                                                 
 	wg           sync.WaitGroup           // 等待所有worker退出  

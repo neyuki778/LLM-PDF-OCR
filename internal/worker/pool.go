@@ -9,20 +9,19 @@ import (
 	"sync"
 	"time"
 
-	gemini "github.com/neyuki778/LLM-PDF-OCR/pkg/LLM/gemini"
-	"google.golang.org/genai"
+	llm "github.com/neyuki778/LLM-PDF-OCR/pkg/LLM"
 )
 
 // 初始化worker pool
-func NewWorkerPool (workerCount int) *WorkerPool {
+func NewWorkerPool (workerCount int, processor llm.PDFProcessor) *WorkerPool {
 	ctx, cancel := context.WithCancel(context.Background())
-	client, _ := genai.NewClient(ctx, nil)
+	// client, _ := genai.NewClient(ctx, nil)
 
 	return &WorkerPool{
 		workerCount: workerCount,
 		taskQueue: make(chan *SubTask, 100),
 		resultChan: make(chan *CompletionSignal, 10),
-		geminiClient: client,
+		processor: processor,
 		ctx: ctx,
 		cancel: cancel,
 		wg: sync.WaitGroup{},
@@ -77,7 +76,7 @@ func (wp *WorkerPool) processTask(task *SubTask) {
 	var content string
 	var err error
 	for ; task.RetryCount < task.MaxRetries; task.RetryCount++ {
-		content, err = gemini.ProcessPDF(wp.ctx, wp.geminiClient, task.PDFPath)
+		content, err = wp.processor.ProcessPDF(wp.ctx, task.PDFPath)
 		if err == nil {
 			break
 		}
