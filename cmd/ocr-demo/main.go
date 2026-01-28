@@ -8,6 +8,7 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/neyuki778/LLM-PDF-OCR/internal/task"
+	llm "github.com/neyuki778/LLM-PDF-OCR/pkg/LLM"
 )
 
 func main() {
@@ -18,7 +19,14 @@ func main() {
 	}
 	pdfPath := os.Args[1]
 
-	tm := task.NewTaskManager(3)
+	config, err := llm.LoadConfigFromEnv()
+	if err != nil {
+		log.Fatalf("Failed to load config: %v", err)
+	}
+	tm, err := task.NewTaskManager(3, config)
+	if err != nil {
+		log.Fatalf("Failed to create TaskManager: %v", err)
+	}
 	if err := tm.Start(); err != nil {
 		log.Fatalf("Failed to start: %v", err)
 	}

@@ -13,7 +13,10 @@ func main() {
 	godotenv.Load()
 
 	// 从环境变量加载 LLM 配置
-	config := llm.LoadConfigFromEnv()
+	config, err := llm.LoadConfigFromEnv()
+	if err != nil {
+		log.Fatalf("Failed to load config: %v", err)
+	}
 	tm, err := task.NewTaskManager(3, config)
 	if err != nil {
 		log.Fatalf("Failed to create TaskManager: %v", err)

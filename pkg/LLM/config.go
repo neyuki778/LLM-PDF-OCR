@@ -1,6 +1,10 @@
 package llm
 
-import "os"
+import (
+	"fmt"
+	"os"
+	"strings"
+)
 
 type Config struct {
 	Provider  string // "gemini" or "mineru"
@@ -11,11 +15,12 @@ type Config struct {
 }
 
 // LoadConfigFromEnv 从环境变量加载配置
-func LoadConfigFromEnv() Config {
-	provider := os.Getenv("LLM_PROVIDER")
+func LoadConfigFromEnv() (Config, error) {
+	provider := strings.TrimSpace(os.Getenv("LLM_PROVIDER"))
 	if provider == "" {
 		provider = "gemini" // 默认使用 gemini
 	}
+	provider = strings.ToLower(provider)
 
 	cfg := Config{
 		Provider:  provider,
@@ -26,10 +31,24 @@ func LoadConfigFromEnv() Config {
 	case "gemini":
 		cfg.APIKey = os.Getenv("GEMINI_API_KEY")
 		cfg.Model = os.Getenv("GEMINI_MODEL")
+		if cfg.Model == "" {
+			cfg.Model = "gemini-3-flash-preview"
+		}
+		if cfg.APIKey == "" {
+			return Config{}, fmt.Errorf("missing GEMINI_API_KEY for provider=gemini")
+		}
 	case "mineru":
 		cfg.APIKey = os.Getenv("MINERU_TOKEN")
 		cfg.BaseURL = os.Getenv("MINERU_BASE_URL")
+		if cfg.APIKey == "" {
+			return Config{}, fmt.Errorf("missing MINERU_TOKEN for provider=mineru")
+		}
+		if strings.TrimSpace(cfg.PublicURL) == "" {
+			return Config{}, fmt.Errorf("missing PUBLIC_URL for provider=mineru")
+		}
+	default:
+		return Config{}, fmt.Errorf("unknown LLM_PROVIDER: %s", provider)
 	}
 
-	return cfg
+	return cfg, nil
 }
