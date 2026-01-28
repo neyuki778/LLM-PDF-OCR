@@ -1,0 +1,148 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "SF Pro Text", "SF Pro Display", sans-serif;
+  background: #f5f5f7;
+  color: #111;
+}
+
+.app {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 48px 24px 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.hero h1 {
+  margin: 0 0 8px;
+  font-size: 32px;
+}
+
+.hero p {
+  margin: 0;
+  color: #555;
+}
+
+.card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.card:hover {
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+  transform: translateY(-1px);
+}
+
+.upload-zone {
+  border: 2px dashed #d0d0d7;
+  border-radius: 12px;
+  padding: 24px;
+  text-align: center;
+  background: #fafafa;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.upload-zone.dragover {
+  border-color: #007aff;
+  background: rgba(0, 122, 255, 0.06);
+}
+
+.upload-zone p {
+  margin: 0 0 12px;
+  color: #666;
+}
+
+button {
+  appearance: none;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 16px;
+  background: #e5e5ea;
+  color: #111;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+button:hover {
+  background: #d1d1d6;
+}
+
+button:active {
+  transform: scale(0.98);
+}
+
+.primary {
+  background: #007aff;
+  color: #fff;
+}
+
+.primary:hover {
+  background: #0062cc;
+}
+
+.status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.label {
+  color: #666;
+}
+
+.value {
+  font-weight: 600;
+}
+
+.link {
+  display: inline-block;
+  margin-top: 8px;
+  color: #007aff;
+  text-decoration: none;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+.hint {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: #777;
+}
+
+.hint.error {
+  color: #d33;
+}
+
+.query {
+  display: flex;
+  gap: 8px;
+}
+
+.query input {
+  flex: 1;
+  border: 1px solid #d0d0d7;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+}
+
+.query input:focus {
+  outline: none;
+  border-color: #007aff;
+}
+
+.hidden {
+  display: none;
+}

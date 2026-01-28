@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LLM PDF OCR</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="hero">
+        <h1>LLM PDF OCR</h1>
+        <p>上传 PDF，生成 Markdown。</p>
+      </header>
+
+      <section class="card">
+        <h2>上传 PDF</h2>
+        <div id="upload-zone" class="upload-zone">
+          <p>拖拽 PDF 到这里，或点击选择文件</p>
+          <button id="select-button" class="primary">选择 PDF</button>
+          <input id="file-input" type="file" accept="application/pdf" hidden />
+        </div>
+        <p id="upload-hint" class="hint">仅支持 PDF 格式。</p>
+      </section>
+
+      <section class="card">
+        <h2>当前任务</h2>
+        <div class="status-row">
+          <span class="label">Task ID</span>
+          <span id="task-id" class="value">-</span>
+        </div>
+        <div class="status-row">
+          <span class="label">状态</span>
+          <span id="task-status" class="value">未开始</span>
+        </div>
+        <div class="status-row">
+          <span class="label">进度</span>
+          <span id="task-progress" class="value">-</span>
+        </div>
+        <a id="result-link" class="link hidden" href="#" target="_blank" rel="noreferrer">下载结果</a>
+        <p id="status-message" class="hint"></p>
+      </section>
+
+      <section class="card">
+        <h2>任务查询</h2>
+        <div class="query">
+          <input id="query-input" type="text" placeholder="输入 Task ID" />
+          <button id="query-button">查询</button>
+        </div>
+        <p id="query-message" class="hint"></p>
+      </section>
+    </main>
+
+    <script src="dist/main.js"></script>
+  </body>
+</html>
