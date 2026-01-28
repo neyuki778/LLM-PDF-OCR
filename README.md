@@ -88,8 +88,12 @@ SubTask (内部实现)
 │   ├── ocr-demo/           # PDF 转 Markdown 命令行工具
 │   ├── gemini-demo/        # Gemini API 功能演示
 │   ├── mineru-demo/        # MinerU 集成示例
-│   └── server/             # HTTP 服务入口（开发中）
+│   ├── pdf-demo/           # PDF 分片演示
+│   └── server/             # HTTP 服务入口
 ├── internal/
+│   ├── api/                # HTTP API 层 (Gin)
+│   │   ├── server.go       # Server: Gin 引擎初始化、路由注册
+│   │   └── handlers.go     # HTTP handlers: createTask, getTask, getResult
 │   ├── task/               # 任务管理 (TaskManager/ParentTask/SubTask)
 │   │   ├── manager.go      # 任务调度和生命周期管理
 │   │   ├── parent.go       # 父任务聚合逻辑
@@ -99,7 +103,9 @@ SubTask (内部实现)
 │       └── types.go        # Worker 类型定义
 ├── pkg/
 │   ├── pdf/                # PDF 分片工具
-│   ├── LLM/gemini/         # Gemini SDK 封装
+│   ├── LLM/
+│   │   ├── gemini/         # Gemini SDK 封装
+│   │   └── MinerU/         # MinerU 客户端实现
 │   └── result/             # 结果处理工具
 └── output/                 # Markdown 输出目录
 ```
@@ -126,8 +132,9 @@ go run ./cmd/ocr-demo/main.go ./path/to/your.pdf
 # 运行 Gemini API 演示
 go run ./cmd/gemini-demo/main.go
 
-# 运行服务（开发中）
+# 运行服务
 go run ./cmd/server/main.go
+# 服务启动于 :8080
 ```
 
 ## 🎯 开发路线图
@@ -135,8 +142,32 @@ go run ./cmd/server/main.go
 - [x] **Phase 1**: 基础 PDF 处理和 Gemini API 集成
 - [x] **Phase 2**: PDF 分片功能
 - [x] **Phase 3**: Worker Pool 并发调度 + TaskManager
-- [ ] **Phase 4**: HTTP API 服务
+- [ ] **Phase 4**: HTTP API 服务 (进行中)
 - [ ] **Phase 5**: LRU 缓存和文件管理
+
+## 🌐 HTTP API
+
+### 端点
+
+```
+POST   /api/tasks          # 上传 PDF，创建任务 → 返回 task_id
+GET    /api/tasks/:id      # 查询任务状态和进度
+GET    /api/tasks/:id/result  # 获取 Markdown 结果 (JSON 格式)
+DELETE /api/tasks/:id      # 删除任务 (待实现)
+```
+
+### 使用示例
+
+```bash
+# 上传 PDF
+curl -X POST -F "file=@path/to/file.pdf" http://localhost:8080/api/tasks
+
+# 查询状态
+curl http://localhost:8080/api/tasks/{task_id}
+
+# 获取结果
+curl http://localhost:8080/api/tasks/{task_id}/result
+```
 
 ## 📊 性能优势 (计划中)
 
