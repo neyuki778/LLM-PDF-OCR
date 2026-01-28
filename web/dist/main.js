@@ -21,6 +21,7 @@ const setCurrentTask = (taskId) => {
   progressEl.textContent = "-";
   resultLink.classList.add("hidden");
   resultLink.href = "#";
+  resultLink.removeAttribute("download");
   setMessage(statusMessage, "");
 };
 const startPolling = (taskId) => {
@@ -45,6 +46,7 @@ const fetchStatus = async (taskId) => {
     progressEl.textContent = progress || "-";
     if (status === "completed" || status === "success" || status === "done") {
       resultLink.href = `/api/tasks/${encodeURIComponent(taskId)}/result`;
+      resultLink.setAttribute("download", `${taskId}.md`);
       resultLink.classList.remove("hidden");
       setMessage(statusMessage, "任务完成，可以下载结果。");
       if (pollTimer) {

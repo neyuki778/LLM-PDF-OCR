@@ -26,6 +26,7 @@ const setCurrentTask = (taskId: string) => {
   progressEl.textContent = "-"
   resultLink.classList.add("hidden")
   resultLink.href = "#"
+  resultLink.removeAttribute("download")
   setMessage(statusMessage, "")
 }
 
@@ -54,6 +55,7 @@ const fetchStatus = async (taskId: string) => {
 
     if (status === "completed" || status === "success" || status === "done") {
       resultLink.href = `/api/tasks/${encodeURIComponent(taskId)}/result`
+      resultLink.setAttribute("download", `${taskId}.md`)
       resultLink.classList.remove("hidden")
       setMessage(statusMessage, "任务完成，可以下载结果。")
       if (pollTimer) {
