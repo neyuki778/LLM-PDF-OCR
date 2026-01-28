@@ -194,3 +194,9 @@ func (tm *TaskManager) WaitForTask(taskID string, timeout time.Duration) error {
 	}
 
 }
+
+func (tm *TaskManager) GetTask(taskID string) *ParentTask {
+	tm.mu.RLock()
+	defer tm.mu.RUnlock()
+	return tm.tasks[taskID]
+}
