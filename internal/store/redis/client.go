@@ -13,6 +13,6 @@ func NewClient(addr string) (*redis.Client, error) {
 	if err := client.Ping(context.Background()).Err(); err != nil {
 		return nil, err
 	}
-	
+
 	return client, nil
 }
