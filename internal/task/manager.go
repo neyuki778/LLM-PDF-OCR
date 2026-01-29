@@ -90,8 +90,8 @@ func (tm *TaskManager) CreateTask(pdfPath string) (taskID string, err error) {
 	workDir := filepath.Join("./output/", taskID)
 
 	// 提取原文件名字
-	baseName := filepath.Base(pdfPath) // "report.pdf"
-	nameWithoutExt := strings.TrimSuffix(baseName, filepath.Ext(baseName))  // "report"
+	baseName := filepath.Base(pdfPath)                                     // "report.pdf"
+	nameWithoutExt := strings.TrimSuffix(baseName, filepath.Ext(baseName)) // "report"
 
 	totalPages, err := pdf.GetPageCount(pdfPath)
 	if err != nil {
@@ -125,13 +125,13 @@ func (tm *TaskManager) CreateTask(pdfPath string) (taskID string, err error) {
 		tempFilePath := filepath.Join(workDir, fmt.Sprintf("page_%d.md", i+1))
 
 		meta := SubTaskMeta{
-			ID: subTaskID,
-			PageStart: pageStart,
-			PageEnd: pageEnd,
+			ID:           subTaskID,
+			PageStart:    pageStart,
+			PageEnd:      pageEnd,
 			SplitPDFPath: splitPath,
 			TempFilePath: tempFilePath,
-			Status: SubTaskPending,
-			Error: nil,
+			Status:       SubTaskPending,
+			Error:        nil,
 		}
 
 		parentTask.SubTasks[subTaskID] = &meta
@@ -150,37 +150,37 @@ func (tm *TaskManager) CreateTask(pdfPath string) (taskID string, err error) {
 	return taskID, nil
 }
 
-func (tm *TaskManager) SubmitTaskToPool(taskID string, timeout time.Duration) error {                              
-	tm.mu.RLock()                                                                                                
-	parentTask, exists := tm.tasks[taskID]                                                                       
-	tm.mu.RUnlock()                                                                                              
-																													
-	if !exists {                                                                                                 
-		return fmt.Errorf("task not found: %s", taskID)                                                      
-	}                                                                                                            
-																													
-	for _, subTask := range parentTask.SubTasks {                                                                
-		workerTask := &worker.SubTask{                                                                       
-			ID:         subTask.ID,                                                                      
-			ParentID:   taskID,                                                                          
-			PDFPath:    subTask.SplitPDFPath,                                                            
-			OutputPath: subTask.TempFilePath,                                                            
-			PageStart:  subTask.PageStart,                                                               
-			PageEnd:    subTask.PageEnd,                                                                 
-		}                                                                                                    
-																												
-		if err := tm.pool.Submit(workerTask, timeout); err != nil {                                          
-			return fmt.Errorf("failed to submit subtask %s: %w", subTask.ID, err)                        
-		}                                                                                                    
-	}                                                                                                            
-																													
-	parentTask.Status = StatusProcessing                                                                         
-	return nil                                                                                                   
+func (tm *TaskManager) SubmitTaskToPool(taskID string, timeout time.Duration) error {
+	tm.mu.RLock()
+	parentTask, exists := tm.tasks[taskID]
+	tm.mu.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("task not found: %s", taskID)
+	}
+
+	for _, subTask := range parentTask.SubTasks {
+		workerTask := &worker.SubTask{
+			ID:         subTask.ID,
+			ParentID:   taskID,
+			PDFPath:    subTask.SplitPDFPath,
+			OutputPath: subTask.TempFilePath,
+			PageStart:  subTask.PageStart,
+			PageEnd:    subTask.PageEnd,
+		}
+
+		if err := tm.pool.Submit(workerTask, timeout); err != nil {
+			return fmt.Errorf("failed to submit subtask %s: %w", subTask.ID, err)
+		}
+	}
+
+	parentTask.Status = StatusProcessing
+	return nil
 }
 
 func (tm *TaskManager) WaitForTask(taskID string, timeout time.Duration) error {
 	tm.mu.RLock()
-	parentTask ,exists := tm.tasks[taskID]
+	parentTask, exists := tm.tasks[taskID]
 	tm.mu.RUnlock()
 
 	if !exists {
@@ -193,9 +193,9 @@ func (tm *TaskManager) WaitForTask(taskID string, timeout time.Duration) error {
 
 	for {
 		select {
-		case <- ddl:
+		case <-ddl:
 			return fmt.Errorf("timeout waiting for task %s", taskID)
-		case <- ticker.C:
+		case <-ticker.C:
 			if parentTask.Status == StatusCompleted {
 				return nil
 			}
@@ -208,4 +208,27 @@ func (tm *TaskManager) GetTask(taskID string) *ParentTask {
 	tm.mu.RLock()
 	defer tm.mu.RUnlock()
 	return tm.tasks[taskID]
+}
+
+// GetStatus 返回 TaskManager 的整体状态信息
+func (tm *TaskManager) GetStatus() map[string]interface{} {
+	tm.mu.RLock()
+	defer tm.mu.RUnlock()
+
+	// 统计任务状态
+	statusCount := map[string]int{
+		"pending":    0,
+		"processing": 0,
+		"completed":  0,
+	}
+
+	for _, task := range tm.tasks {
+		statusCount[task.Status]++
+	}
+
+	return map[string]interface{}{
+		"total_tasks": len(tm.tasks),
+		"task_status": statusCount,
+		"worker_pool": tm.pool.GetStatus(),
+	}
 }

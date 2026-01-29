@@ -127,3 +127,13 @@ func (s *Server) deleteTask(c *gin.Context) {
 		"error": "not implemented yet - this is your task!",
 	})
 }
+
+// getStatus 处理 GET /api/status - 获取服务内部状态
+func (s *Server) getStatus(c *gin.Context) {
+	status := s.taskManager.GetStatus()
+
+	c.JSON(http.StatusOK, gin.H{
+		"timestamp": time.Now().Unix(),
+		"status":    status,
+	})
+}

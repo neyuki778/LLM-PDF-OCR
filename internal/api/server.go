@@ -29,9 +29,12 @@ func (s *Server) setupRoutes() {
 	// API 路由
 	api := s.router.Group("/api")
 	{
+		// 状态查询
+		api.GET("/status", s.getStatus)
+
 		// Phase 4.1
-		api.POST("/tasks", s.createTask)          // 上传 PDF，创建任务
-		api.GET("/tasks/:id", s.getTask)          // 查询任务状态
+		api.POST("/tasks", s.createTask) // 上传 PDF，创建任务
+		api.GET("/tasks/:id", s.getTask) // 查询任务状态
 
 		// Phase 4.2
 		api.GET("/tasks/:id/result", s.getResult) // 下载结果
@@ -42,7 +45,7 @@ func (s *Server) setupRoutes() {
 	s.router.StaticFile("/", "./web/index.html")
 	s.router.StaticFile("/style.css", "./web/style.css")
 	s.router.Static("/dist", "./web/dist")
-	s.router.Static("/output", "./output")   // 暴露分片后的 PDF 供 LLM-API 提供商拉取
+	s.router.Static("/output", "./output") // 暴露分片后的 PDF 供 LLM-API 提供商拉取
 }
 
 // Run 启动 HTTP 服务

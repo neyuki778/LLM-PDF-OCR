@@ -13,18 +13,18 @@ import (
 )
 
 // 初始化worker pool
-func NewWorkerPool (workerCount int, processor llm.PDFProcessor) *WorkerPool {
+func NewWorkerPool(workerCount int, processor llm.PDFProcessor) *WorkerPool {
 	ctx, cancel := context.WithCancel(context.Background())
 	// client, _ := genai.NewClient(ctx, nil)
 
 	return &WorkerPool{
 		workerCount: workerCount,
-		taskQueue: make(chan *SubTask, 100),
-		resultChan: make(chan *CompletionSignal, 10),
-		processor: processor,
-		ctx: ctx,
-		cancel: cancel,
-		wg: sync.WaitGroup{},
+		taskQueue:   make(chan *SubTask, 100),
+		resultChan:  make(chan *CompletionSignal, 10),
+		processor:   processor,
+		ctx:         ctx,
+		cancel:      cancel,
+		wg:          sync.WaitGroup{},
 	}
 }
 
@@ -38,7 +38,7 @@ func (wp *WorkerPool) Start() {
 
 // 向worker pool中放入任务
 
-func (wp *WorkerPool) Submit (task *SubTask, timeout time.Duration) error {
+func (wp *WorkerPool) Submit(task *SubTask, timeout time.Duration) error {
 	select {
 	case wp.taskQueue <- task:
 		return nil
@@ -64,7 +64,7 @@ func (wp *WorkerPool) Shutdown() {
 }
 
 func (wp *WorkerPool) ResultChan() <-chan *CompletionSignal {
-    return wp.resultChan
+	return wp.resultChan
 }
 
 func (wp *WorkerPool) processTask(task *SubTask) {
@@ -126,4 +126,14 @@ func (wp *WorkerPool) processTask(task *SubTask) {
 	signal.Success = true
 	signal.Error = nil
 	wp.resultChan <- signal
+}
+
+// GetStatus 返回 WorkerPool 当前状态
+func (wp *WorkerPool) GetStatus() map[string]interface{} {
+	return map[string]interface{}{
+		"worker_count":       wp.workerCount,
+		"queue_length":       len(wp.taskQueue),
+		"queue_capacity":     cap(wp.taskQueue),
+		"result_chan_length": len(wp.resultChan),
+	}
 }

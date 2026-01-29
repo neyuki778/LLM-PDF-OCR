@@ -150,7 +150,8 @@ go run ./cmd/ocr-demo/main.go ./path/to/your.pdf
 - [x] **Phase 2**: PDF 分片功能
 - [x] **Phase 3**: Worker Pool 并发调度 + TaskManager
 - [x] **Phase 4**: HTTP API 服务 + Web 前端
-- [ ] **Phase 5**: LRU 缓存和文件管理
+- [ ] **Phase 5**: 加入Redis实现内存管理
+- [ ] **Phase 6**: 支持多api轮询, 进一步提高并发程度和可用性
 
 ## 🌐 HTTP API
 
@@ -177,7 +178,6 @@ curl http://localhost:8080/api/tasks/{task_id}/result
 ```
 
 ## 📊 性能优势 (计划中)
-
 
 *测试环境：Gemini 2.5 Flash，平均单页处理 1 秒*
 
