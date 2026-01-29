@@ -29,7 +29,7 @@ func NewClient(baseURL, token, publicURL string) *Client {
 		BaseURL:   baseURL,
 		Token:     token,
 		PublicURL: publicURL,
-		HTTP:      &http.Client{Timeout: 20 * time.Second},
+		HTTP:      &http.Client{Timeout: 60 * time.Second},
 	}
 }
 

@@ -23,6 +23,9 @@ type TaskManager struct {
 	// Worker Pool
 	pool *worker.WorkerPool
 
+	// 配置信息
+	config llm.Config
+
 	// 生命周期控制
 	stopChan chan struct{} // 用于停止监听器
 }
@@ -35,6 +38,7 @@ func NewTaskManager(workCount int, config llm.Config) (*TaskManager, error) {
 	return &TaskManager{
 		tasks:    make(map[string]*ParentTask),
 		pool:     worker.NewWorkerPool(workCount, processor),
+		config:   config,
 		stopChan: make(chan struct{}),
 	}, nil
 }
@@ -226,9 +230,30 @@ func (tm *TaskManager) GetStatus() map[string]interface{} {
 		statusCount[task.Status]++
 	}
 
+	// 脱敏配置信息（隐藏 APIKey）
+	sanitizedConfig := map[string]interface{}{
+		"provider":   tm.config.Provider,
+		"model":      tm.config.Model,
+		"base_url":   tm.config.BaseURL,
+		"public_url": tm.config.PublicURL,
+		"api_key":    maskAPIKey(tm.config.APIKey),
+	}
+
 	return map[string]interface{}{
 		"total_tasks": len(tm.tasks),
 		"task_status": statusCount,
 		"worker_pool": tm.pool.GetStatus(),
+		"config":      sanitizedConfig,
 	}
+}
+
+// maskAPIKey 脱敏 API Key，只显示前后几位
+func maskAPIKey(apiKey string) string {
+	if apiKey == "" {
+		return ""
+	}
+	if len(apiKey) <= 8 {
+		return "****"
+	}
+	return apiKey[:4] + "****" + apiKey[len(apiKey)-4:]
 }

@@ -92,7 +92,7 @@ SubTask (内部实现)
 │   └── server/             # HTTP 服务入口
 ├── web/                    # 前端界面 (TypeScript)
 │   ├── index.html          # 单页面入口
-│   ├── style.css           # Apple 风格样式
+│   ├── style.css           # 极简 风格样式
 │   ├── src/main.ts         # TypeScript 源码
 │   └── dist/main.js        # 编译输出
 ├── internal/
