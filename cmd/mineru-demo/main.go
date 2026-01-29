@@ -27,7 +27,7 @@ func main() {
 		log.Fatalf("missing env vars: MINERU_TOKEN=%t MINERU_FILE_URL=%t", token != "", fileURL != "")
 	}
 
-	client := mineru.NewClient(baseURL, token)
+	client := mineru.NewClient(baseURL, token, baseURL)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
