@@ -23,8 +23,8 @@ type ParentTask struct {
 	OutputPath  string // 最终结果路径：./output/{ID}/result.md
 
 	// 分片信息
-	TotalShards int                      // 总分片数
-	SubTasks    map[string]*SubTaskMeta  // key: SubTaskID
+	TotalShards int                     // 总分片数
+	SubTasks    map[string]*SubTaskMeta // key: SubTaskID
 
 	// 进度追踪
 	CompletedCount int      // 已完成数量（成功+失败）

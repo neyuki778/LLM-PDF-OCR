@@ -9,17 +9,17 @@ import (
 	worker "github.com/neyuki778/LLM-PDF-OCR/internal/worker"
 )
 
-func NewParentTask (id, pdfPath, workDir string) *ParentTask {
+func NewParentTask(id, pdfPath, workDir string) *ParentTask {
 	return &ParentTask{
-		ID: id,
-		OriginalPDF: pdfPath,
-		WorkDir: workDir,
-		OutputPath: filepath.Join(workDir, "result.md"),
-		TotalShards: 0,
-		SubTasks: make(map[string]*SubTaskMeta),
+		ID:             id,
+		OriginalPDF:    pdfPath,
+		WorkDir:        workDir,
+		OutputPath:     filepath.Join(workDir, "result.md"),
+		TotalShards:    0,
+		SubTasks:       make(map[string]*SubTaskMeta),
 		CompletedCount: 0,
-		FailedTasks: make([]string, 0),
-		Status: StatusPending,
+		FailedTasks:    make([]string, 0),
+		Status:         StatusPending,
 	}
 }
 
@@ -59,12 +59,12 @@ func (pt *ParentTask) doAggregate() error {
 				return err
 			}
 			_, err = file.Write(content)
-            if err != nil {
-            	return err
-            }
+			if err != nil {
+				return err
+			}
 		} else {
-			_, err = fmt.Fprintf(file, "<!-- [OCR Failed] Pages %d-%d: %s -->\n", 
-            	subTaskMeta.PageStart, subTaskMeta.PageEnd, subTaskMeta.ID)
+			_, err = fmt.Fprintf(file, "<!-- [OCR Failed] Pages %d-%d: %s -->\n",
+				subTaskMeta.PageStart, subTaskMeta.PageEnd, subTaskMeta.ID)
 			if err != nil {
 				return err
 			}

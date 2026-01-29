@@ -34,14 +34,14 @@ func main() {
 
 	taskID, err := tm.CreateTask(pdfPath)
 	if err != nil {
-		log.Fatalf("Failed to create task: %v", err) 
+		log.Fatalf("Failed to create task: %v", err)
 	}
-	fmt.Printf("Task created: %s\n", taskID) 
-	
+	fmt.Printf("Task created: %s\n", taskID)
+
 	if err := tm.SubmitTaskToPool(taskID, 10*time.Second); err != nil {
 		log.Fatalf("Failed to submit: %v", err)
 	}
-	fmt.Println("Processing...") 
+	fmt.Println("Processing...")
 	if err := tm.WaitForTask(taskID, 5*time.Minute); err != nil {
 		log.Fatalf("Failed while waiting: %v", err)
 	}

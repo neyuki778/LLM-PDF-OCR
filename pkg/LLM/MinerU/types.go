@@ -2,7 +2,7 @@ package mineru
 
 // CreateTaskRequest 对应 POST /api/v4/extract/task 的请求体
 type CreateTaskRequest struct {
-	URL			  string   `json:"url"`
+	URL           string   `json:"url"`
 	ModelVersion  string   `json:"model_version,omitempty"`
 	IsOCR         bool     `json:"is_ocr,omitempty"`
 	EnableFormula bool     `json:"enable_formula,omitempty"`
@@ -21,7 +21,7 @@ type CreateTaskResponse struct {
 	Msg     string `json:"msg"`
 	TraceID string `json:"trace_id"`
 	Data    struct {
-			TaskID string `json:"task_id"`
+		TaskID string `json:"task_id"`
 	} `json:"data"`
 }
 

@@ -15,9 +15,9 @@ import (
 )
 
 type Client struct {
-	BaseURL   string       // MinerU API 地址，如 https://mineru.net
-	Token     string       // MinerU API Token
-	PublicURL string       // 本服务的公开地址，如 https://yourdomain.com
+	BaseURL   string // MinerU API 地址，如 https://mineru.net
+	Token     string // MinerU API Token
+	PublicURL string // 本服务的公开地址，如 https://yourdomain.com
 	HTTP      *http.Client
 }
 
