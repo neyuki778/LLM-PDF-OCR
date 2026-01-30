@@ -1,198 +1,197 @@
-# Task 模块实现待办清单
+# TaskManager 重构：接入 Redis Store
 
-## 实现顺序说明
+## 目标
 
-按照依赖关系从底向上，分6个阶段实现。每个阶段完成后**先测试再进入下一阶段**。
+将 TaskManager 从纯内存存储改为 Redis + 内存混合模式：
+- **Redis**：持久化任务元数据（Status、路径、时间戳）
+- **内存**：仅保留运行时状态（SubTasks、完成计数、聚合逻辑）
 
----
-
-## 阶段1：ParentTask基础方法 ✅
-
-**文件**：`internal/task/parent.go`
-
-- [ ] `NewParentTask(id, pdfPath, workDir string) *ParentTask`
-  - 初始化ParentTask结构
-  - 创建SubTasks map
-  - 设置状态为pending
-
-- [ ] `OnSubTaskComplete(signal *CompletionSignal)`
-  - 加锁保护
-  - 更新SubTaskMeta状态（success/failed）
-  - 更新CompletedCount计数器
-  - 记录失败任务到FailedTasks列表
-  - 检测完成后调用Aggregate（用aggregateOnce保证只执行一次）
-
-- [ ] `IsAllDone() bool`
-  - 判断 `CompletedCount == TotalShards`
-
-
----
-
-## 阶段2：TaskManager初始化和监听器
-
-**文件**：`internal/task/manager.go`
-
-- [ ] `NewTaskManager(workerCount int) *TaskManager`
-  - 初始化tasks map
-  - 创建WorkerPool
-  - 创建stopChan
-
-- [ ] `Start()`
-  - 启动WorkerPool（调用pool.Start()）
-  - 启动监听器goroutine（调用listenResults()）
-
-- [ ] `listenResults()`（私有方法）
-  - 循环监听pool.resultChan
-  - 根据signal.ParentID查找ParentTask（加读锁）
-  - 调用parentTask.OnSubTaskComplete(signal)
-  - 处理stopChan退出信号
-
-- [ ] `Shutdown()`
-  - 发送stopChan信号
-  - 关闭WorkerPool（调用pool.Shutdown()）
-
----
-
-## 阶段3：任务创建和PDF分片
-
-**文件**：`internal/task/manager.go`
-
-- [ ] `CreateTask(pdfPath string) (taskID string, error)`
-  1. 生成UUID作为taskID（使用github.com/google/uuid）
-  2. 创建工作目录`./output/{taskID}/`
-  3. 调用`pkg/pdf.SplitPDF()`切分PDF
-  4. 创建ParentTask
-  5. 遍历分片文件，为每个分片创建SubTaskMeta
-  6. 构造worker.SubTask并提交到WorkerPool
-  7. 更新ParentTask状态为processing
-  8. 将ParentTask存入tasks map（加写锁）
-
-**关键细节**：
-- SubTask.PDFPath = `./output/{taskID}/split_{i}.pdf`
-- SubTask.TempFilePath = `./output/{taskID}/page_{PageStart}.md`
-- SubTask.MaxRetries = 3
-- 提交超时时间建议5秒
-
----
-
-## 阶段4：Worker实际处理逻辑
-
-**文件**：`internal/worker/pool.go`
-
-- [ ] 更新`worker()`方法，调用`processTask()`
-- [ ] 实现`processTask(task *SubTask) error`（私有方法）
-  1. 读取分片PDF文件（task.PDFPath）
-  2. 调用Gemini API（参考cmd/gemini-demo/main.go的处理逻辑）
-  3. 将返回的Markdown写入临时文件（task.TempFilePath）
-  4. 返回错误（如果失败）
-
-**关键细节**：
-- 使用wp.geminiClient调用API
-- 指数退避重试逻辑：2s, 4s, 8s
-- 只在最终成功/失败时发送CompletionSignal
-
-**需要更新的类型**：
-- [ ] 更新`internal/worker/types.go`的SubTask，添加`TempFilePath string`字段
-
----
-
-## 阶段5：结果聚合
-
-**文件**：`internal/task/parent.go`
-
-- [ ] `Aggregate() error`
-  1. 创建result.md文件
-  2. 按PageStart顺序遍历SubTasks
-  3. 对于成功的SubTask：读取临时MD文件，追加到result.md
-  4. 对于失败的SubTask：写入错误占位符
-     ```markdown
-     # Page {PageStart}-{PageEnd}
-     [OCR失败: {Error}，已重试3次]
-     ```
-  5. 删除所有split_*.pdf
-  6. 删除所有page_*.md
-  7. 更新ParentTask状态为completed
-
-**关键细节**：
-- 聚合前加锁
-- 使用sort对SubTasks按PageStart排序
-- 删除文件时忽略错误（文件可能不存在）
-
-
----
-
-## 阶段6：辅助功能（可选）
-
-**文件**：`internal/task/manager.go`
-
-- [ ] `GetTask(taskID string) (*ParentTask, error)`
-  - 从tasks map查询（加读锁）
-  - 返回ParentTask副本或错误
-
-- [ ] `DeleteTask(taskID string) error`
-  - 删除整个任务目录`./output/{taskID}/`
-  - 从tasks map移除（加写锁）
-
----
-
-## 依赖和工具
-
-### 需要安装的包
-```bash
-go get github.com/google/uuid
-```
-
-### 需要更新的现有文件
-- [ ] `internal/worker/types.go` - SubTask添加TempFilePath字段
-- [ ] `internal/worker/pool.go` - 实现processTask逻辑
-
-### 需要创建的新文件
-- [ ] `internal/task/parent.go` - ParentTask方法实现
-- [ ] `cmd/task-demo/main.go` - 完整流程测试程序
-
----
-
-## 测试策略
-
-每个阶段的测试用例：
+## 现有结构
 
 ```
-internal/task/
-├── parent_test.go       # 测试ParentTask方法
-├── manager_test.go      # 测试TaskManager
-└── integration_test.go  # 端到端测试
+TaskManager
+├── tasks map[string]*ParentTask  ← 所有数据都在这里
+└── pool *WorkerPool
+
+ParentTask（混合了持久化数据和运行时状态）
+├── ID, OriginalPDF, WorkDir, OutputPath  ← 应该持久化
+├── Status                                 ← 应该持久化
+├── SubTasks map[string]*SubTaskMeta      ← 运行时
+├── CompletedCount, FailedTasks           ← 运行时
+└── mu, aggregateOnce                     ← 运行时
 ```
 
-最小可测试demo：
+## 目标结构
+
+```
+TaskManager
+├── store store.Store                    ← Redis（持久化）
+├── activeJobs map[string]*JobRuntime    ← 内存（仅运行中任务）
+└── pool *WorkerPool
+
+store.TaskRecord（Redis 中）
+├── ID, Status
+├── PDFPath, ResultPath, WorkDir
+├── TotalPages, Error
+└── CreatedAt, UpdatedAt
+
+JobRuntime（内存中，任务完成后删除）
+├── SubTasks map[string]*SubTaskMeta
+├── TotalShards, CompletedCount, FailedCount
+├── mu, aggregateOnce
+└── (可选) Cancel context.CancelFunc
+```
+
+---
+
+## Phase 1：基础设施
+
+### 1.1 完善 Store 层
+
+- [x] `internal/store/models.go` - 定义 TaskRecord
+- [x] `internal/store/interface.go` - 定义 Store 接口
+- [x] `internal/store/errors.go` - 定义 ErrNotFound
+- [x] `internal/store/redis/store.go` - 实现 RedisStore
+- [ ] `internal/store/redis/store.go` - 添加 NewRedisStore() 构造函数
+
+### 1.2 Redis 客户端初始化
+
+- [ ] `internal/store/redis/client.go` - NewClient(addr) 函数
+- [ ] `cmd/server/main.go` - 初始化 Redis 连接，注入到 TaskManager
+
+---
+
+## Phase 2：重构 TaskManager
+
+### 2.1 新增 JobRuntime 类型
+
+新建 `internal/task/runtime.go`：
+
 ```go
-// cmd/task-demo/main.go
-func main() {
-    tm := task.NewTaskManager(5)
-    tm.Start()
+type JobRuntime struct {
+    TaskID         string
+    WorkDir        string                    // 需要用于聚合
+    OutputPath     string                    // 最终结果路径
+    TotalShards    int
+    SubTasks       map[string]*SubTaskMeta
+    CompletedCount int
+    FailedCount    int
+    FailedTasks    []string
 
-    taskID, _ := tm.CreateTask("test.pdf")
-    fmt.Printf("任务创建: %s\n", taskID)
-
-    // 轮询任务状态
-    for {
-        task, _ := tm.GetTask(taskID)
-        fmt.Printf("进度: %d/%d\n", task.CompletedCount, task.TotalShards)
-        if task.Status == "completed" {
-            break
-        }
-        time.Sleep(2 * time.Second)
-    }
-
-    tm.Shutdown()
+    mu            sync.Mutex
+    aggregateOnce sync.Once
 }
+
+func NewJobRuntime(taskID, workDir string, totalShards int) *JobRuntime
+func (jr *JobRuntime) OnSubTaskComplete(signal *CompletionSignal) error
+func (jr *JobRuntime) IsAllDone() bool
+func (jr *JobRuntime) Aggregate() error
 ```
+
+### 2.2 修改 TaskManager 结构
+
+修改 `internal/task/manager.go`：
+
+```go
+type TaskManager struct {
+    store      store.Store              // 新增：Redis store
+    activeJobs map[string]*JobRuntime   // 替换 tasks
+    mu         sync.RWMutex
+    pool       *worker.WorkerPool
+    config     llm.Config
+    stopChan   chan struct{}
+}
+
+func NewTaskManager(workerCount int, config llm.Config, store store.Store) (*TaskManager, error)
+```
+
+### 2.3 修改各方法
+
+#### CreateTask(pdfPath) (taskID, error)
+
+```go
+// 1. 生成 taskID, workDir
+// 2. 切分 PDF，创建 SubTaskMeta
+// 3. 创建 TaskRecord，保存到 Redis（status=pending）
+// 4. 创建 JobRuntime，加入 activeJobs
+// 5. 返回 taskID
+```
+
+#### SubmitTaskToPool(taskID, timeout) error
+
+```go
+// 1. 从 activeJobs 获取 JobRuntime（不查 Redis）
+// 2. 提交所有 SubTask 到 pool
+// 3. 更新 Redis status → processing
+```
+
+#### handleResult(signal) error
+
+```go
+// 1. 从 activeJobs 获取 JobRuntime
+// 2. 调用 jr.OnSubTaskComplete(signal)
+// 3. if jr.IsAllDone():
+//      go func() {
+//          jr.Aggregate()
+//          store.UpdateTaskStatus(id, completed)
+//          delete(activeJobs, id)  // 清理内存
+//      }()
+```
+
+#### GetTask(taskID) (*store.TaskRecord, error)
+
+```go
+// 直接从 Redis 读取，不查内存
+return tm.store.GetTask(ctx, taskID)
+```
+
+#### WaitForTask(taskID, timeout) error
+
+```go
+// 轮询 Redis 状态（或保留轮询内存状态）
+// 推荐：轮询 Redis，因为状态已经同步
+```
+
+---
+
+## Phase 3：清理旧代码
+
+### 3.1 删除/重构文件
+
+- [ ] `internal/task/parent.go` - 聚合逻辑移到 JobRuntime，删除此文件
+- [ ] `internal/task/types.go` - 删除 ParentTask 类型，保留 SubTaskMeta 和常量
+
+### 3.2 更新 API handlers
+
+- [ ] `internal/api/handlers.go` - GetTask 返回 store.TaskRecord
+
+---
+
+## Phase 4：启动恢复（可选，后续优化）
+
+- [ ] `TaskManager.Start()` 时扫描 Redis 中 status=processing 的任务
+- [ ] 将这些任务标记为 failed（error="服务重启中断"）
+- [ ] 或：实现任务重新入队逻辑
+
+---
+
+## 生命周期对照表
+
+| 操作 | Redis | activeJobs |
+|------|-------|------------|
+| CreateTask | SaveTask(pending) | 创建 JobRuntime |
+| SubmitTaskToPool | UpdateStatus(processing) | - |
+| SubTask 完成 | - | 更新计数 |
+| 全部完成 | UpdateStatus(completed) | 删除 JobRuntime |
+| 查询状态 | GetTask() | - |
+| 删除任务 | DeleteTask() | 删除 JobRuntime（如果存在）|
+| 服务重启 | 数据保留 | 丢失（processing 任务需处理）|
 
 ---
 
 ## 注意事项
 
-1. **并发安全**：所有访问ParentTask和tasks map的地方都要加锁
-2. **错误处理**：文件I/O和API调用都要检查错误
-3. **资源清理**：确保中间文件在聚合后删除
-4. **路径处理**：使用filepath.Join而不是字符串拼接
-5. **UUID导入**：使用`github.com/google/uuid`而不是标准库
+1. **错误处理**：Redis 写入失败时的回滚策略
+2. **并发安全**：activeJobs 的锁保护
+3. **TTL**：TaskRecord 设置合理的过期时间（如 7 天）
+4. **key 格式**：统一使用 `task:{id}` 前缀
