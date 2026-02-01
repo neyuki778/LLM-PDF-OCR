@@ -2,10 +2,13 @@ package main
 
 import (
 	"log"
+	"os"
+	"time"
 
 	"github.com/joho/godotenv"
-	"github.com/neyuki778/LLM-PDF-OCR/internal/api"
-	"github.com/neyuki778/LLM-PDF-OCR/internal/task"
+	api "github.com/neyuki778/LLM-PDF-OCR/internal/api"
+	redis "github.com/neyuki778/LLM-PDF-OCR/internal/store/redis"
+	task "github.com/neyuki778/LLM-PDF-OCR/internal/task"
 	llm "github.com/neyuki778/LLM-PDF-OCR/pkg/LLM"
 )
 
@@ -17,7 +20,17 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
-	tm, err := task.NewTaskManager(3, config)
+	addr := os.Getenv("REDIS_ADDRESS")
+	if addr == "" {
+		addr = "localhost:6379"
+	}
+	r, err := redis.NewClient(addr)
+	if err != nil {
+		log.Fatalf("Failed to connect redis: %v", err)
+	}
+	rs := redis.NewRedisStore(r, 5 * time.Hour)
+
+	tm, err := task.NewTaskManager(3, config, rs)
 	if err != nil {
 		log.Fatalf("Failed to create TaskManager: %v", err)
 	}

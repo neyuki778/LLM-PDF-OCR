@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	redis "github.com/neyuki778/LLM-PDF-OCR/internal/store/redis"
 	worker "github.com/neyuki778/LLM-PDF-OCR/internal/worker"
 	llm "github.com/neyuki778/LLM-PDF-OCR/pkg/LLM"
 	pdf "github.com/neyuki778/LLM-PDF-OCR/pkg/pdf"
@@ -28,9 +29,12 @@ type TaskManager struct {
 
 	// 生命周期控制
 	stopChan chan struct{} // 用于停止监听器
+
+	// 使用redis做持久化
+	redisStore *redis.RedisStore
 }
 
-func NewTaskManager(workCount int, config llm.Config) (*TaskManager, error) {
+func NewTaskManager(workCount int, config llm.Config, redisStore *redis.RedisStore) (*TaskManager, error) {
 	processor, err := llm.NewProcessor(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create processor: %w", err)
@@ -40,6 +44,7 @@ func NewTaskManager(workCount int, config llm.Config) (*TaskManager, error) {
 		pool:     worker.NewWorkerPool(workCount, processor),
 		config:   config,
 		stopChan: make(chan struct{}),
+		redisStore: redisStore,
 	}, nil
 }
 

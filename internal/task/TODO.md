@@ -52,12 +52,12 @@ JobRuntime（内存中，任务完成后删除）
 - [x] `internal/store/interface.go` - 定义 Store 接口
 - [x] `internal/store/errors.go` - 定义 ErrNotFound
 - [x] `internal/store/redis/store.go` - 实现 RedisStore
-- [ ] `internal/store/redis/store.go` - 添加 NewRedisStore() 构造函数
+- [x] `internal/store/redis/store.go` - 添加 NewRedisStore() 构造函数
 
 ### 1.2 Redis 客户端初始化
 
-- [ ] `internal/store/redis/client.go` - NewClient(addr) 函数
-- [ ] `cmd/server/main.go` - 初始化 Redis 连接，注入到 TaskManager
+- [x] `internal/store/redis/client.go` - NewClient(addr) 函数
+- [x] `cmd/server/main.go` - 初始化 Redis 连接，注入到 TaskManager
 
 ---
 
