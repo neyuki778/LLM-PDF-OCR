@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"google.golang.org/genai"
 )
@@ -15,12 +17,13 @@ const (
 
 // Client 封装 Gemini API 客户端，实现 PDFProcessor 接口
 type Client struct {
-	client *genai.Client
-	model  string
+	client    *genai.Client
+	model     string
+	publicURL string
 }
 
 // NewClient 创建 Gemini 客户端
-func NewClient(apiKey, model string) (*Client, error) {
+func NewClient(apiKey, model, publicURL string) (*Client, error) {
 	if model == "" {
 		model = DefaultModel
 	}
@@ -32,28 +35,35 @@ func NewClient(apiKey, model string) (*Client, error) {
 	}
 
 	return &Client{
-		client: client,
-		model:  model,
+		client:    client,
+		model:     model,
+		publicURL: publicURL,
 	}, nil
 }
 
 // ProcessPDF 实现 PDFProcessor 接口，读取本地 PDF 并调用 Gemini OCR
 func (c *Client) ProcessPDF(ctx context.Context, pdfPath string) (string, error) {
-	// 1. 读取 PDF 文件
-	pdfBytes, err := os.ReadFile(pdfPath)
-	if err != nil {
-		return "", fmt.Errorf("failed to read PDF file: %w", err)
-	}
-
-	// 2. 构建请求内容
-	pdfPart := []*genai.Part{
-		{
-			InlineData: &genai.Blob{
-				MIMEType: "application/pdf",
-				Data:     pdfBytes,
+	var pdfPart []*genai.Part
+	if url, ok := c.buildPublicURL(pdfPath); ok {
+		pdfPart = []*genai.Part{
+			genai.NewPartFromURI(url, "application/pdf"),
+			genai.NewPartFromText(Prompt),
+		}
+	} else {
+		// 回退为本地读取
+		pdfBytes, err := os.ReadFile(pdfPath)
+		if err != nil {
+			return "", fmt.Errorf("failed to read PDF file: %w", err)
+		}
+		pdfPart = []*genai.Part{
+			{
+				InlineData: &genai.Blob{
+					MIMEType: "application/pdf",
+					Data:     pdfBytes,
+				},
 			},
-		},
-		genai.NewPartFromText(Prompt),
+			genai.NewPartFromText(Prompt),
+		}
 	}
 
 	contents := []*genai.Content{
@@ -67,4 +77,18 @@ func (c *Client) ProcessPDF(ctx context.Context, pdfPath string) (string, error)
 	}
 
 	return result.Text(), nil
+}
+
+func (c *Client) buildPublicURL(pdfPath string) (string, bool) {
+	if c.publicURL == "" {
+		return "", false
+	}
+	cleanPath := filepath.Clean(pdfPath)
+	outputPrefix := filepath.Clean("output") + string(os.PathSeparator)
+	if !strings.HasPrefix(cleanPath, outputPrefix) {
+		return "", false
+	}
+	relative := strings.TrimPrefix(cleanPath, outputPrefix)
+	publicBase := strings.TrimRight(c.publicURL, "/")
+	return publicBase + "/output/" + filepath.ToSlash(relative), true
 }

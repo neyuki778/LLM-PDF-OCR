@@ -15,7 +15,7 @@ type PDFProcessor interface {
 func NewProcessor(cfg Config) (PDFProcessor, error) {
 	switch cfg.Provider {
 	case "gemini":
-		return gemini.NewClient(cfg.APIKey, cfg.Model)
+		return gemini.NewClient(cfg.APIKey, cfg.Model, cfg.PublicURL)
 	case "mineru":
 		return mineru.NewClient(cfg.BaseURL, cfg.APIKey, cfg.PublicURL), nil
 	default:
