@@ -3,12 +3,14 @@ package task
 import (
 	"context"
 	"fmt"
+	"log"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	store "github.com/neyuki778/LLM-PDF-OCR/internal/store"
 	redis "github.com/neyuki778/LLM-PDF-OCR/internal/store/redis"
 	worker "github.com/neyuki778/LLM-PDF-OCR/internal/worker"
 	llm "github.com/neyuki778/LLM-PDF-OCR/pkg/LLM"
@@ -88,7 +90,27 @@ func (tm *TaskManager) handleResult(signal *worker.CompletionSignal) error {
 	}
 
 	if parentTask.IsAllDone() {
-		go parentTask.Aggregate()
+		go func() {
+			// 1. 执行聚合
+			if err := parentTask.Aggregate(); err != nil {
+				log.Printf("[TaskManager] Aggregate failed for task %s: %v", parentTask.ID, err)
+				return
+			}
+
+			// 2. 聚合成功后写入 Redis
+			ctx := context.Background()
+			record := &store.TaskRecord{
+				ID:         parentTask.ID,
+				Status:     StatusCompleted,
+				PDFPath:    parentTask.OriginalPDF,
+				ResultPath: parentTask.OutputPath,
+				CreatedAt:  time.Now(),
+				UpdatedAt:  time.Now(),
+			}
+			if err := tm.redisStore.SaveTask(ctx, record); err != nil {
+				log.Printf("[TaskManager] Redis save failed for task %s: %v", parentTask.ID, err)
+			}
+		}()
 	}
 	return nil
 }
@@ -214,9 +236,31 @@ func (tm *TaskManager) WaitForTask(taskID string, timeout time.Duration) error {
 }
 
 func (tm *TaskManager) GetTask(taskID string) *ParentTask {
+	// 1. 先查内存（运行中的任务）
 	tm.mu.RLock()
-	defer tm.mu.RUnlock()
-	return tm.tasks[taskID]
+	task := tm.tasks[taskID]
+	tm.mu.RUnlock()
+
+	if task != nil {
+		return task
+	}
+
+	// 2. 内存没有，查 Redis（已完成的任务）
+	ctx := context.Background()
+	record, err := tm.redisStore.GetTask(ctx, taskID)
+	if err != nil {
+		return nil // Redis 查询失败或不存在，返回 nil
+	}
+
+	// 3. 把 TaskRecord 转成 ParentTask 返回
+	// 注意：这是一个"只读"的 ParentTask，只包含基本信息
+	return &ParentTask{
+		ID:          record.ID,
+		Status:      record.Status,
+		OriginalPDF: record.PDFPath,
+		OutputPath:  record.ResultPath,
+		// SubTasks 等运行时信息已丢失，保持为空
+	}
 }
 
 // GetStatus 返回 TaskManager 的整体状态信息
