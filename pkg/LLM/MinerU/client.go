@@ -155,7 +155,13 @@ func (c *Client) ProcessPDF(ctx context.Context, pdfPath string) (string, error)
 	}
 	defer os.Remove(zipPath)
 
-	// 5. 提取 Markdown 内容
+	// 5. 提取图片资源到 output/<task_id>/images
+	workDir := filepath.Dir(pdfPath)
+	if err := result.ExtractImagesToDir(zipPath, workDir); err != nil {
+		return "", fmt.Errorf("failed to extract images: %w", err)
+	}
+
+	// 6. 提取 Markdown 内容
 	markdown, err := result.ExtractMarkdown(zipPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to extract markdown: %w", err)

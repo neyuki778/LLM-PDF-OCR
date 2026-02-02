@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -95,6 +96,13 @@ func (tm *TaskManager) handleResult(signal *worker.CompletionSignal) error {
 			if err := parentTask.Aggregate(); err != nil {
 				log.Printf("[TaskManager] Aggregate failed for task %s: %v", parentTask.ID, err)
 				return
+			}
+
+			// 2. 聚合完成后修正 MinerU 图片路径
+			if tm.config.Provider == "mineru" {
+				if err := rewriteResultImages(parentTask.OutputPath, tm.config.PublicURL, parentTask.ID); err != nil {
+					log.Printf("[TaskManager] Rewrite images failed for task %s: %v", parentTask.ID, err)
+				}
 			}
 
 			// 2. 聚合成功后写入 Redis
@@ -305,4 +313,22 @@ func maskAPIKey(apiKey string) string {
 		return "****"
 	}
 	return apiKey[:4] + "****" + apiKey[len(apiKey)-4:]
+}
+
+func rewriteResultImages(outputPath, publicURL, taskID string) error {
+	if publicURL == "" || taskID == "" {
+		return nil
+	}
+
+	content, err := os.ReadFile(outputPath)
+	if err != nil {
+		return err
+	}
+
+	base := strings.TrimRight(publicURL, "/")
+	prefix := base + "/output/" + taskID + "/images/"
+	updated := strings.ReplaceAll(string(content), "](images/", "]("+prefix)
+	updated = strings.ReplaceAll(updated, "src=\"images/", "src=\""+prefix)
+
+	return os.WriteFile(outputPath, []byte(updated), 0644)
 }

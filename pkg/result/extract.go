@@ -131,3 +131,55 @@ func ExtractToDir(zipPath, destDir string) error {
 
 	return nil
 }
+
+// ExtractImagesToDir extracts only "images/" entries from a ZIP into destDir.
+func ExtractImagesToDir(zipPath, destDir string) error {
+	r, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return fmt.Errorf("open zip failed: %w", err)
+	}
+	defer r.Close()
+
+	if err := os.MkdirAll(destDir, 0755); err != nil {
+		return fmt.Errorf("create destination dir failed: %w", err)
+	}
+
+	for _, f := range r.File {
+		if !strings.HasPrefix(f.Name, "images/") {
+			continue
+		}
+
+		destPath := filepath.Join(destDir, f.Name)
+		if f.FileInfo().IsDir() {
+			if err := os.MkdirAll(destPath, f.Mode()); err != nil {
+				return fmt.Errorf("create dir %s failed: %w", destPath, err)
+			}
+			continue
+		}
+
+		if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+			return fmt.Errorf("create parent dir %s failed: %w", destPath, err)
+		}
+
+		rc, err := f.Open()
+		if err != nil {
+			return fmt.Errorf("open %s failed: %w", f.Name, err)
+		}
+
+		outFile, err := os.OpenFile(destPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
+		if err != nil {
+			rc.Close()
+			return fmt.Errorf("create %s failed: %w", destPath, err)
+		}
+
+		_, err = io.Copy(outFile, rc)
+		outFile.Close()
+		rc.Close()
+
+		if err != nil {
+			return fmt.Errorf("extract %s failed: %w", destPath, err)
+		}
+	}
+
+	return nil
+}
