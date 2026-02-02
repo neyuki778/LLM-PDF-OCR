@@ -126,10 +126,13 @@ LLM_PROVIDER=gemini
 GEMINI_MODEL=gemini-3-flash-preview
 
 # MinerU（仅在 LLM_PROVIDER=mineru 时需要）
-PublicURL=your_domain
+PUBLIC_URL=https://your.domain
 MINERU_TOKEN=your_token_here
 MINERU_BASE_URL=https://mineru.net
 MINERU_MODEL_VERSION=vlm
+
+# Redis（任务元数据持久化）
+REDIS_ADDRESS=localhost:6379
 ```
 
 ### 运行示例
@@ -144,13 +147,21 @@ go run ./cmd/ocr-demo/main.go ./path/to/your.pdf
 # 输出：./output/{task_id}/result.md
 ```
 
+### 使用 Docker 启动 Redis（持久化）
+
+```bash
+docker compose up -d redis
+```
+
+Redis 数据会保存到 `./data/redis`，重启容器后已完成任务仍可查询。
+
 ## 🎯 开发路线图
 
 - [x] **Phase 1**: 基础 PDF 处理和 Gemini API 集成
 - [x] **Phase 2**: PDF 分片功能
 - [x] **Phase 3**: Worker Pool 并发调度 + TaskManager
 - [x] **Phase 4**: HTTP API 服务 + Web 前端
-- [ ] **Phase 5**: 加入Redis实现内存管理
+- [x] **Phase 5**: Redis 持久化已完成（服务重启后可查询已完成任务）
 - [ ] **Phase 6**: 支持多api轮询, 进一步提高并发程度和可用性
 
 ## 🌐 HTTP API
