@@ -8,6 +8,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/pdfcpu/pdfcpu v0.11.1
 	google.golang.org/genai v1.43.0
+	modernc.org/sqlite v1.40.1
 )
 
 require (
