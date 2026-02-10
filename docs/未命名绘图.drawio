@@ -1,0 +1,52 @@
+<mxfile host="Electron" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/29.0.3 Chrome/140.0.7339.249 Electron/38.7.0 Safari/537.36" version="29.0.3">
+  <diagram name="架构流程图" id="-1qKcdebJGiuebFDa9zS">
+    <mxGraphModel dx="1426" dy="759" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="NpWR5LWO0WlolDHMTRTU-5" value="&lt;b&gt;HTTP 层 (Gateway)&lt;/b&gt;&lt;br&gt;Gin · RESTful API&lt;br&gt;文件上传 · 任务查询 · 结果下载" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;align=center;verticalAlign=middle;spacingTop=4;spacingBottom=4;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="180" y="430" width="300" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="NpWR5LWO0WlolDHMTRTU-6" value="" style="endArrow=block;endFill=1;strokeWidth=2;strokeColor=#333333;" edge="1" parent="1" source="NpWR5LWO0WlolDHMTRTU-5" target="NpWR5LWO0WlolDHMTRTU-7">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="NpWR5LWO0WlolDHMTRTU-7" value="&lt;b&gt;调度层 (Scheduler)&lt;/b&gt;&lt;br&gt;TaskManager&lt;br&gt;PDF 分片 · 任务创建 · 结果聚合" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;align=center;verticalAlign=middle;spacingTop=4;spacingBottom=4;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="180" y="570" width="300" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="NpWR5LWO0WlolDHMTRTU-8" value="Fan-out (1 → N)" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontStyle=2;fontSize=11;fontColor=#999999;" vertex="1" parent="1">
+          <mxGeometry x="340" y="665" width="110" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="NpWR5LWO0WlolDHMTRTU-9" value="" style="endArrow=block;endFill=1;strokeWidth=2;strokeColor=#333333;" edge="1" parent="1" source="NpWR5LWO0WlolDHMTRTU-7" target="NpWR5LWO0WlolDHMTRTU-10">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="NpWR5LWO0WlolDHMTRTU-10" value="&lt;b&gt;并发层 (Workers)&lt;/b&gt;&lt;br&gt;Worker Pool (goroutine)&lt;br&gt;有界队列 · 并发消费 · 指数退避重试" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;align=center;verticalAlign=middle;spacingTop=4;spacingBottom=4;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="180" y="710" width="300" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="NpWR5LWO0WlolDHMTRTU-11" value="" style="endArrow=block;endFill=1;strokeWidth=2;strokeColor=#333333;" edge="1" parent="1" source="NpWR5LWO0WlolDHMTRTU-10" target="NpWR5LWO0WlolDHMTRTU-14">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="NpWR5LWO0WlolDHMTRTU-12" value="" style="endArrow=block;endFill=1;strokeWidth=2;strokeColor=#333333;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="250" y="790" as="sourcePoint" />
+            <mxPoint x="250" y="850" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="NpWR5LWO0WlolDHMTRTU-13" value="" style="endArrow=block;endFill=1;strokeWidth=2;strokeColor=#333333;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="410" y="790" as="sourcePoint" />
+            <mxPoint x="410" y="850" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="NpWR5LWO0WlolDHMTRTU-14" value="&lt;b&gt;LLM API (Upstream)&lt;/b&gt;&lt;br&gt;Gemini 3 Flash / MinerU&lt;br&gt;PDF → Markdown 识别" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;align=center;verticalAlign=middle;spacingTop=4;spacingBottom=4;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="180" y="850" width="300" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="NpWR5LWO0WlolDHMTRTU-15" value="" style="endArrow=block;endFill=1;strokeWidth=2;strokeColor=#333333;" edge="1" parent="1" source="NpWR5LWO0WlolDHMTRTU-14" target="NpWR5LWO0WlolDHMTRTU-16">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="NpWR5LWO0WlolDHMTRTU-16" value="&lt;b&gt;Redis (Persistence)&lt;/b&gt;&lt;br&gt;已完成任务持久化&lt;br&gt;TTL 自动过期 · 降级查询" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;align=center;verticalAlign=middle;spacingTop=10;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="230" y="990" width="200" height="100" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
