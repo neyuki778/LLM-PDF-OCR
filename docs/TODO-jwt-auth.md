@@ -134,8 +134,8 @@
 - [x] refresh token 的新增/查询/撤销
 
 3. Auth Service
-- [ ] 注册：hash 密码 + 入库
-- [ ] 登录：校验密码 + 生成 token + 保存 refresh token
+- [x] 注册：hash 密码 + 入库
+- [x] 登录：校验密码 + 生成 token + 保存 refresh token
 - [ ] 刷新：校验 refresh token + rotation
 - [ ] 登出：撤销 refresh token + 清 cookie
 
