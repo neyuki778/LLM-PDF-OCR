@@ -177,3 +177,49 @@ func TestService_RefreshExpiredRecord(t *testing.T) {
 		t.Fatalf("expected ErrInvalidRefreshToken for expired record, got %v", err)
 	}
 }
+
+func TestService_LogoutRevokesRefreshToken(t *testing.T) {
+	store, svc := newTestService(t)
+	ctx := context.Background()
+
+	_, err := svc.Register(ctx, "user@example.com", "password123")
+	if err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	login, err := svc.Login(ctx, "user@example.com", "password123")
+	if err != nil {
+		t.Fatalf("login: %v", err)
+	}
+
+	if err := svc.Logout(ctx, login.RefreshToken); err != nil {
+		t.Fatalf("logout: %v", err)
+	}
+
+	record, err := store.GetRefreshTokenByHash(ctx, HashToken(login.RefreshToken))
+	if err != nil {
+		t.Fatalf("get refresh token after logout: %v", err)
+	}
+	if record.RevokedAt == nil {
+		t.Fatalf("refresh token should be revoked")
+	}
+
+	_, err = svc.Refresh(ctx, login.RefreshToken)
+	if !errors.Is(err, ErrInvalidRefreshToken) {
+		t.Fatalf("revoked refresh token should not refresh, got %v", err)
+	}
+}
+
+func TestService_LogoutIsIdempotent(t *testing.T) {
+	_, svc := newTestService(t)
+	ctx := context.Background()
+
+	if err := svc.Logout(ctx, ""); err != nil {
+		t.Fatalf("empty token logout should be noop, got %v", err)
+	}
+	if err := svc.Logout(ctx, "not-a-real-token"); err != nil {
+		t.Fatalf("missing token logout should be noop, got %v", err)
+	}
+	if err := svc.Logout(ctx, "not-a-real-token"); err != nil {
+		t.Fatalf("repeated logout should be noop, got %v", err)
+	}
+}

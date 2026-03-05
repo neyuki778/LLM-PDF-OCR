@@ -205,6 +205,24 @@ func (s *Service) Refresh(ctx context.Context, rawRefreshToken string) (*Refresh
 	}, nil
 }
 
+// Logout revokes the current refresh token.
+// It is intentionally idempotent: missing or already-revoked token is treated as success.
+func (s *Service) Logout(ctx context.Context, rawRefreshToken string) error {
+	tokenStr := strings.TrimSpace(rawRefreshToken)
+	if tokenStr == "" {
+		return nil
+	}
+
+	tokenHash := HashToken(tokenStr)
+	if err := s.store.RevokeRefreshTokenByHash(ctx, tokenHash, s.nowFn()); err != nil {
+		if errors.Is(err, ErrRefreshTokenNotFound) {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
 func normalizeEmail(email string) (string, error) {
 	clean := strings.TrimSpace(strings.ToLower(email))
 	if clean == "" {
