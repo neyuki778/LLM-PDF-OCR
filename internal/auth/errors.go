@@ -7,6 +7,7 @@ var (
 	ErrUserNotFound          = errors.New("user not found")
 	ErrRefreshTokenExists    = errors.New("refresh token already exists")
 	ErrRefreshTokenNotFound  = errors.New("refresh token not found")
+	ErrInvalidRefreshToken   = errors.New("invalid refresh token")
 	ErrInvalidEmail          = errors.New("invalid email")
 	ErrPasswordTooShort      = errors.New("password too short")
 	ErrInvalidCredentials    = errors.New("invalid credentials")
