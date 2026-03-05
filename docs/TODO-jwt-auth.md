@@ -125,8 +125,8 @@
 ## 8. 实施 TODO（按顺序）
 
 1. 建表与 SQLite 初始化
-- [ ] 新增 SQLite 连接与 migrations
-- [ ] 创建 `users`、`refresh_tokens` 表和索引
+- [x] 新增 SQLite 连接与 migrations
+- [x] 创建 `users`、`refresh_tokens` 表和索引
 
 2. 用户仓储层
 - [ ] 按 email 查用户
