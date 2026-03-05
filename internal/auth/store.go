@@ -116,3 +116,10 @@ func ensureSQLiteFile(path string) error {
 	}
 	return f.Close()
 }
+
+func isUniqueConstraint(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "UNIQUE constraint failed")
+}

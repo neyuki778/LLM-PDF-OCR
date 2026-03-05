@@ -129,9 +129,9 @@
 - [x] 创建 `users`、`refresh_tokens` 表和索引
 
 2. 用户仓储层
-- [ ] 按 email 查用户
-- [ ] 创建用户（邮箱唯一约束处理）
-- [ ] refresh token 的新增/查询/撤销
+- [x] 按 email 查用户
+- [x] 创建用户（邮箱唯一约束处理）
+- [x] refresh token 的新增/查询/撤销
 
 3. Auth Service
 - [ ] 注册：hash 密码 + 入库
