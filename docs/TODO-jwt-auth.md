@@ -136,7 +136,7 @@
 3. Auth Service
 - [x] 注册：hash 密码 + 入库
 - [x] 登录：校验密码 + 生成 token + 保存 refresh token
-- [ ] 刷新：校验 refresh token + rotation
+- [x] 刷新：校验 refresh token + rotation
 - [ ] 登出：撤销 refresh token + 清 cookie
 
 4. Gin 中间件与路由

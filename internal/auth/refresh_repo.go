@@ -136,6 +136,88 @@ func (s *SQLiteStore) DeleteExpiredRefreshTokens(ctx context.Context, now time.T
 	return rows, nil
 }
 
+// RotateRefreshToken revokes the old refresh token and inserts the new one atomically.
+func (s *SQLiteStore) RotateRefreshToken(ctx context.Context, oldTokenHash string, newToken *RefreshToken, revokedAt time.Time) error {
+	cleanOldHash := strings.TrimSpace(oldTokenHash)
+	if cleanOldHash == "" {
+		return ErrEmptyRefreshTokenHash
+	}
+	if newToken == nil {
+		return errors.New("new refresh token is nil")
+	}
+	newToken.ID = strings.TrimSpace(newToken.ID)
+	newToken.UserID = strings.TrimSpace(newToken.UserID)
+	newToken.TokenHash = strings.TrimSpace(newToken.TokenHash)
+	if newToken.ID == "" {
+		return ErrEmptyRefreshTokenID
+	}
+	if newToken.UserID == "" {
+		return ErrEmptyUserID
+	}
+	if newToken.TokenHash == "" {
+		return ErrEmptyRefreshTokenHash
+	}
+	if newToken.ExpiresAt.IsZero() {
+		return errors.New("new refresh token expires_at is zero")
+	}
+	if newToken.CreatedAt.IsZero() {
+		newToken.CreatedAt = time.Now().UTC()
+	}
+	if revokedAt.IsZero() {
+		revokedAt = time.Now().UTC()
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin tx for refresh token rotation: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	updateResult, err := tx.ExecContext(
+		ctx,
+		`UPDATE refresh_tokens
+		 SET revoked_at = ?
+		 WHERE token_hash = ? AND revoked_at IS NULL;`,
+		revokedAt.Unix(),
+		cleanOldHash,
+	)
+	if err != nil {
+		return fmt.Errorf("revoke old refresh token in tx: %w", err)
+	}
+	affected, err := updateResult.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("revoke old refresh token rows in tx: %w", err)
+	}
+	if affected == 0 {
+		return ErrRefreshTokenNotFound
+	}
+
+	_, err = tx.ExecContext(
+		ctx,
+		`INSERT INTO refresh_tokens (id, user_id, token_hash, expires_at, revoked_at, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?);`,
+		newToken.ID,
+		newToken.UserID,
+		newToken.TokenHash,
+		newToken.ExpiresAt.Unix(),
+		nil,
+		newToken.CreatedAt.Unix(),
+	)
+	if err != nil {
+		if isUniqueConstraint(err) {
+			return ErrRefreshTokenExists
+		}
+		return fmt.Errorf("insert new refresh token in tx: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit refresh token rotation: %w", err)
+	}
+	return nil
+}
+
 func scanRefreshToken(scanner scanTarget) (*RefreshToken, error) {
 	var (
 		token     RefreshToken

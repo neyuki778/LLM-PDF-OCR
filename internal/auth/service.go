@@ -35,6 +35,13 @@ type LoginResult struct {
 	RefreshExpires     time.Time
 }
 
+type RefreshResult struct {
+	AccessToken        string
+	AccessTokenExpires time.Time
+	RefreshToken       string
+	RefreshExpires     time.Time
+}
+
 func NewService(store *SQLiteStore, cfg ServiceConfig) (*Service, error) {
 	if store == nil {
 		return nil, ErrNilStore
@@ -133,6 +140,68 @@ func (s *Service) Login(ctx context.Context, email, password string) (*LoginResu
 		AccessTokenExpires: accessExpires,
 		RefreshToken:       refreshToken,
 		RefreshExpires:     refreshExpires,
+	}, nil
+}
+
+func (s *Service) Refresh(ctx context.Context, rawRefreshToken string) (*RefreshResult, error) {
+	tokenStr := strings.TrimSpace(rawRefreshToken)
+	if tokenStr == "" {
+		return nil, ErrInvalidRefreshToken
+	}
+
+	claims, err := s.jwt.ParseAndValidate(tokenStr, TokenTypeRefresh)
+	if err != nil {
+		return nil, ErrInvalidRefreshToken
+	}
+
+	tokenHash := HashToken(tokenStr)
+	record, err := s.store.GetRefreshTokenByHash(ctx, tokenHash)
+	if err != nil {
+		if errors.Is(err, ErrRefreshTokenNotFound) {
+			return nil, ErrInvalidRefreshToken
+		}
+		return nil, err
+	}
+
+	now := s.nowFn()
+	if record.RevokedAt != nil {
+		return nil, ErrInvalidRefreshToken
+	}
+	if now.After(record.ExpiresAt) {
+		return nil, ErrInvalidRefreshToken
+	}
+	if claims.Subject != record.UserID {
+		return nil, ErrInvalidRefreshToken
+	}
+
+	newAccessToken, newAccessExp, err := s.jwt.IssueAccessToken(record.UserID, now)
+	if err != nil {
+		return nil, err
+	}
+	newRefreshToken, newRefreshExp, err := s.jwt.IssueRefreshToken(record.UserID, now)
+	if err != nil {
+		return nil, err
+	}
+
+	newRefreshRecord := &RefreshToken{
+		ID:        uuid.NewString(),
+		UserID:    record.UserID,
+		TokenHash: HashToken(newRefreshToken),
+		ExpiresAt: newRefreshExp,
+		CreatedAt: now,
+	}
+	if err := s.store.RotateRefreshToken(ctx, tokenHash, newRefreshRecord, now); err != nil {
+		if errors.Is(err, ErrRefreshTokenNotFound) {
+			return nil, ErrInvalidRefreshToken
+		}
+		return nil, err
+	}
+
+	return &RefreshResult{
+		AccessToken:        newAccessToken,
+		AccessTokenExpires: newAccessExp,
+		RefreshToken:       newRefreshToken,
+		RefreshExpires:     newRefreshExp,
 	}, nil
 }
 

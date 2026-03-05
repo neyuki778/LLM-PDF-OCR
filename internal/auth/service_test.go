@@ -105,3 +105,75 @@ func TestService_LoginInvalidCredentials(t *testing.T) {
 		t.Fatalf("expected ErrInvalidCredentials, got %v", err)
 	}
 }
+
+func TestService_RefreshRotation(t *testing.T) {
+	store, svc := newTestService(t)
+	ctx := context.Background()
+
+	_, err := svc.Register(ctx, "user@example.com", "password123")
+	if err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	login, err := svc.Login(ctx, "user@example.com", "password123")
+	if err != nil {
+		t.Fatalf("login: %v", err)
+	}
+
+	oldHash := HashToken(login.RefreshToken)
+	refreshed, err := svc.Refresh(ctx, login.RefreshToken)
+	if err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+	if refreshed.AccessToken == "" || refreshed.RefreshToken == "" {
+		t.Fatalf("refreshed tokens should not be empty")
+	}
+	if refreshed.RefreshToken == login.RefreshToken {
+		t.Fatalf("refresh token should be rotated")
+	}
+
+	oldRecord, err := store.GetRefreshTokenByHash(ctx, oldHash)
+	if err != nil {
+		t.Fatalf("get old refresh token: %v", err)
+	}
+	if oldRecord.RevokedAt == nil {
+		t.Fatalf("old refresh token should be revoked after rotation")
+	}
+
+	if _, err := store.GetRefreshTokenByHash(ctx, HashToken(refreshed.RefreshToken)); err != nil {
+		t.Fatalf("new refresh token should be persisted: %v", err)
+	}
+
+	_, err = svc.Refresh(ctx, login.RefreshToken)
+	if !errors.Is(err, ErrInvalidRefreshToken) {
+		t.Fatalf("reusing rotated refresh token should fail, got %v", err)
+	}
+}
+
+func TestService_RefreshExpiredRecord(t *testing.T) {
+	store, svc := newTestService(t)
+	ctx := context.Background()
+
+	_, err := svc.Register(ctx, "user@example.com", "password123")
+	if err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	login, err := svc.Login(ctx, "user@example.com", "password123")
+	if err != nil {
+		t.Fatalf("login: %v", err)
+	}
+
+	_, err = store.DB().ExecContext(
+		ctx,
+		`UPDATE refresh_tokens SET expires_at = ? WHERE token_hash = ?;`,
+		time.Now().UTC().Add(-1*time.Hour).Unix(),
+		HashToken(login.RefreshToken),
+	)
+	if err != nil {
+		t.Fatalf("force expire refresh token in db: %v", err)
+	}
+
+	_, err = svc.Refresh(ctx, login.RefreshToken)
+	if !errors.Is(err, ErrInvalidRefreshToken) {
+		t.Fatalf("expected ErrInvalidRefreshToken for expired record, got %v", err)
+	}
+}
