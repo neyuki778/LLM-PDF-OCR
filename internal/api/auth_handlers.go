@@ -34,3 +34,35 @@ func (s *Server) logout(c *gin.Context) {
 		"message": "logged out",
 	})
 }
+
+func (s *Server) login (c *gin.Context) {
+	if s.authService == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error": "auth service is not configured",
+		})
+		return
+	}
+
+	var req struct {
+		Email		string `json:"email"`
+		Password	string `json:"password"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		
+	}
+
+	loginResult, err := s.authService.Login(c.Request.Context(), req.Email, req.Password)
+	if err != nil {
+		if errors.Is(err, auth.ErrInvalidCredentials) {
+			c.JSON(http.StatusConflict, gin.H{
+				"code":		409,
+				"message":	"user already registered!",
+			})
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":	"login successful",
+	})
+}
