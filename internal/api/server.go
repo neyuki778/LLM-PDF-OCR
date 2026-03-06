@@ -2,22 +2,27 @@ package api
 
 import (
 	"github.com/gin-gonic/gin"
+	auth "github.com/neyuki778/LLM-PDF-OCR/internal/auth"
 	task "github.com/neyuki778/LLM-PDF-OCR/internal/task"
 )
 
 // Server 封装 Gin 引擎和依赖
 type Server struct {
-	router      *gin.Engine
-	taskManager *task.TaskManager
+	router           *gin.Engine
+	taskManager      *task.TaskManager
+	authService      *auth.Service
+	authCookieSecure bool
 }
 
 // NewServer 创建 API 服务器实例
-func NewServer(tm *task.TaskManager) *Server {
+func NewServer(tm *task.TaskManager, authService *auth.Service, authCookieSecure bool) *Server {
 	r := gin.Default() // 自带 Logger 和 Recovery 中间件
 
 	s := &Server{
-		router:      r,
-		taskManager: tm,
+		router:           r,
+		taskManager:      tm,
+		authService:      authService,
+		authCookieSecure: authCookieSecure,
 	}
 
 	s.setupRoutes()
@@ -39,6 +44,11 @@ func (s *Server) setupRoutes() {
 		// Phase 4.2
 		api.GET("/tasks/:id/result", s.getResult) // 下载结果
 		api.DELETE("/tasks/:id", s.deleteTask)    // 删除任务
+
+		authGroup := api.Group("/auth")
+		{
+			authGroup.POST("/logout", s.logout)
+		}
 	}
 
 	// 静态文件服务

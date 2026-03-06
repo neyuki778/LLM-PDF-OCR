@@ -3,10 +3,12 @@ package main
 import (
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
 	api "github.com/neyuki778/LLM-PDF-OCR/internal/api"
+	auth "github.com/neyuki778/LLM-PDF-OCR/internal/auth"
 	redis "github.com/neyuki778/LLM-PDF-OCR/internal/store/redis"
 	task "github.com/neyuki778/LLM-PDF-OCR/internal/task"
 	llm "github.com/neyuki778/LLM-PDF-OCR/pkg/LLM"
@@ -28,7 +30,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to connect redis: %v", err)
 	}
-	rs := redis.NewRedisStore(r, 5 * time.Hour)
+	rs := redis.NewRedisStore(r, 5*time.Hour)
 
 	tm, err := task.NewTaskManager(3, config, rs)
 	if err != nil {
@@ -39,10 +41,56 @@ func main() {
 	}
 	defer tm.ShutDown()
 
+	var authService *auth.Service
+	jwtSecret := strings.TrimSpace(os.Getenv("JWT_SECRET"))
+	if jwtSecret != "" {
+		sqlitePath := os.Getenv("SQLITE_PATH")
+		if sqlitePath == "" {
+			sqlitePath = "./data/app.db"
+		}
+
+		authStore, err := auth.NewSQLiteStore(sqlitePath)
+		if err != nil {
+			log.Fatalf("Failed to init auth sqlite store: %v", err)
+		}
+		defer authStore.Close()
+
+		accessTTL, err := parseDurationEnv("JWT_ACCESS_TTL", 15*time.Minute)
+		if err != nil {
+			log.Fatalf("Invalid JWT_ACCESS_TTL: %v", err)
+		}
+		refreshTTL, err := parseDurationEnv("JWT_REFRESH_TTL", 7*24*time.Hour)
+		if err != nil {
+			log.Fatalf("Invalid JWT_REFRESH_TTL: %v", err)
+		}
+
+		authService, err = auth.NewService(authStore, auth.ServiceConfig{
+			JWTSecret:  jwtSecret,
+			JWTIssuer:  os.Getenv("JWT_ISSUER"),
+			AccessTTL:  accessTTL,
+			RefreshTTL: refreshTTL,
+		})
+		if err != nil {
+			log.Fatalf("Failed to init auth service: %v", err)
+		}
+	} else {
+		log.Println("Auth disabled: JWT_SECRET is empty")
+	}
+
+	cookieSecure := strings.EqualFold(strings.TrimSpace(os.Getenv("AUTH_COOKIE_SECURE")), "true")
+
 	// 创建并启动 HTTP 服务
-	server := api.NewServer(tm)
+	server := api.NewServer(tm, authService, cookieSecure)
 	log.Println("Server starting on :8080")
 	if err := server.Run(":8080"); err != nil {
 		log.Fatalf("Server failed: %v", err)
 	}
+}
+
+func parseDurationEnv(key string, fallback time.Duration) (time.Duration, error) {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback, nil
+	}
+	return time.ParseDuration(raw)
 }
