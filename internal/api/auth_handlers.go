@@ -35,7 +35,8 @@ func (s *Server) logout(c *gin.Context) {
 	})
 }
 
-func (s *Server) login (c *gin.Context) {
+// login 处理 POST /api/auth/login
+func (s *Server) login(c *gin.Context) {
 	if s.authService == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{
 			"error": "auth service is not configured",
@@ -44,25 +45,45 @@ func (s *Server) login (c *gin.Context) {
 	}
 
 	var req struct {
-		Email		string `json:"email"`
-		Password	string `json:"password"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "invalid request body",
+		})
+		return
 	}
 
-	loginResult, err := s.authService.Login(c.Request.Context(), req.Email, req.Password)
+	result, err := s.authService.Login(c.Request.Context(), req.Email, req.Password)
 	if err != nil {
 		if errors.Is(err, auth.ErrInvalidCredentials) {
-			c.JSON(http.StatusConflict, gin.H{
-				"code":		409,
-				"message":	"user already registered!",
+			clearAuthCookies(c, s.authCookieSecure)
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error": "invalid email or password",
 			})
 			return
 		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to login",
+		})
+		return
 	}
 
+	setAuthCookies(
+		c,
+		s.authCookieSecure,
+		result.AccessToken,
+		result.AccessTokenExpires,
+		result.RefreshToken,
+		result.RefreshExpires,
+	)
+
 	c.JSON(http.StatusOK, gin.H{
-		"message":	"login successful",
+		"message": "login successful",
+		"user": gin.H{
+			"id":    result.User.ID,
+			"email": result.User.Email,
+		},
 	})
 }
