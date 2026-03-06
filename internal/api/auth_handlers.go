@@ -87,3 +87,40 @@ func (s *Server) login(c *gin.Context) {
 		},
 	})
 }
+
+func (s *Server) refresh(c *gin.Context) {
+	if s.authService == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error": "auth service is not configured",
+		})
+		return
+	}
+
+	refreshToken, _ := c.Cookie(refreshTokenCookieName)
+	result, err := s.authService.Refresh(c.Request.Context(), refreshToken)
+	if err != nil {
+		if errors.Is(err, auth.ErrInvalidRefreshToken) {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error": "invalid refresh token",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to refresh",
+		})
+		return
+	}
+
+	setAuthCookies(
+		c,
+		s.authCookieSecure,
+		result.AccessToken,
+		result.AccessTokenExpires,
+		result.RefreshToken,
+		result.RefreshExpires,
+	)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "refresh successful",
+	})
+}

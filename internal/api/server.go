@@ -49,6 +49,7 @@ func (s *Server) setupRoutes() {
 		{
 			authGroup.POST("/logout", s.logout)
 			authGroup.POST("/login", s.login)
+			authGroup.POST("/refresh", s.refresh)
 		}
 	}
 
