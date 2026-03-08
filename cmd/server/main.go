@@ -1,8 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -78,9 +80,27 @@ func main() {
 	}
 
 	cookieSecure := strings.EqualFold(strings.TrimSpace(os.Getenv("AUTH_COOKIE_SECURE")), "true")
+	guestMaxPages, err := parsePositiveIntEnv("TASK_MAX_PAGES_GUEST", 20)
+	if err != nil {
+		log.Fatalf("Invalid TASK_MAX_PAGES_GUEST: %v", err)
+	}
+	userMaxPages, err := parsePositiveIntEnv("TASK_MAX_PAGES_USER", 40)
+	if err != nil {
+		log.Fatalf("Invalid TASK_MAX_PAGES_USER: %v", err)
+	}
+	hardMaxPages, err := parsePositiveIntEnv("TASK_MAX_PAGES_HARD", 100)
+	if err != nil {
+		log.Fatalf("Invalid TASK_MAX_PAGES_HARD: %v", err)
+	}
+
+	log.Printf("Task quota config: guest=%d user=%d hard=%d", guestMaxPages, userMaxPages, hardMaxPages)
 
 	// 创建并启动 HTTP 服务
-	server := api.NewServer(tm, authService, cookieSecure)
+	server := api.NewServer(tm, authService, cookieSecure, api.TaskQuotaConfig{
+		GuestMaxPages: guestMaxPages,
+		UserMaxPages:  userMaxPages,
+		HardMaxPages:  hardMaxPages,
+	})
 	log.Println("Server starting on :8080")
 	if err := server.Run(":8080"); err != nil {
 		log.Fatalf("Server failed: %v", err)
@@ -93,4 +113,19 @@ func parseDurationEnv(key string, fallback time.Duration) (time.Duration, error)
 		return fallback, nil
 	}
 	return time.ParseDuration(raw)
+}
+
+func parsePositiveIntEnv(key string, fallback int) (int, error) {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback, nil
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, err
+	}
+	if value <= 0 {
+		return 0, fmt.Errorf("must be > 0")
+	}
+	return value, nil
 }

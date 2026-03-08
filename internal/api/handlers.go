@@ -1,15 +1,19 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	auth "github.com/neyuki778/LLM-PDF-OCR/internal/auth"
 	"github.com/neyuki778/LLM-PDF-OCR/internal/task"
+	pdf "github.com/neyuki778/LLM-PDF-OCR/pkg/pdf"
 )
 
 // createTask 处理 POST /api/tasks - 上传 PDF 并创建任务
@@ -28,6 +32,12 @@ func (s *Server) createTask(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "only PDF files are allowed now",
 		})
+		return
+	}
+
+	tier, maxPages, statusCode, tierErr := s.resolveTaskTier(c)
+	if statusCode != 0 {
+		c.JSON(statusCode, gin.H{"error": tierErr})
 		return
 	}
 
@@ -50,10 +60,39 @@ func (s *Server) createTask(c *gin.Context) {
 		return
 	}
 
+	totalPages, err := pdf.GetPageCount(savePath)
+	if err != nil {
+		_ = os.Remove(savePath)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "failed to read PDF page count",
+		})
+		return
+	}
+
+	effectiveMaxPages := maxPages
+	if s.taskQuota.HardMaxPages > 0 && effectiveMaxPages > s.taskQuota.HardMaxPages {
+		effectiveMaxPages = s.taskQuota.HardMaxPages
+	}
+	if totalPages > effectiveMaxPages {
+		_ = os.Remove(savePath)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":       fmt.Sprintf("PDF has %d pages, exceeds max %d pages for %s tier", totalPages, effectiveMaxPages, tier),
+			"tier":        tier,
+			"total_pages": totalPages,
+			"max_pages":   effectiveMaxPages,
+		})
+		return
+	}
+
 	// 5. 调用 TaskManager 创建任务
 	taskID, err := s.taskManager.CreateTask(savePath)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		_ = os.Remove(savePath)
+		status := http.StatusInternalServerError
+		if isPageLimitErr(err) {
+			status = http.StatusBadRequest
+		}
+		c.JSON(status, gin.H{
 			"error": fmt.Sprintf("failed to create task: %v", err),
 		})
 		return
@@ -136,4 +175,36 @@ func (s *Server) getStatus(c *gin.Context) {
 		"timestamp": time.Now().Unix(),
 		"status":    status,
 	})
+}
+
+func (s *Server) resolveTaskTier(c *gin.Context) (tier string, maxPages int, statusCode int, errMsg string) {
+	tier = "guest"
+	maxPages = s.taskQuota.GuestMaxPages
+
+	// Auth 未启用时，全部按 guest 处理。
+	if s.authService == nil {
+		return tier, maxPages, 0, ""
+	}
+
+	accessToken, err := c.Cookie(accessTokenCookieName)
+	if err != nil || strings.TrimSpace(accessToken) == "" {
+		return tier, maxPages, 0, ""
+	}
+
+	if _, err := s.authService.Me(c.Request.Context(), accessToken); err != nil {
+		if errors.Is(err, auth.ErrInvalidAccessToken) {
+			return "", 0, http.StatusUnauthorized, "invalid access token"
+		}
+		return "", 0, http.StatusInternalServerError, "failed to verify login status"
+	}
+
+	return "user", s.taskQuota.UserMaxPages, 0, ""
+}
+
+func isPageLimitErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "total pages") && strings.Contains(msg, "should less than")
 }

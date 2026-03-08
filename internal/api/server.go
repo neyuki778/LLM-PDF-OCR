@@ -6,16 +6,28 @@ import (
 	task "github.com/neyuki778/LLM-PDF-OCR/internal/task"
 )
 
+type TaskQuotaConfig struct {
+	GuestMaxPages int
+	UserMaxPages  int
+	HardMaxPages  int
+}
+
 // Server 封装 Gin 引擎和依赖
 type Server struct {
 	router           *gin.Engine
 	taskManager      *task.TaskManager
 	authService      *auth.Service
 	authCookieSecure bool
+	taskQuota        TaskQuotaConfig
 }
 
 // NewServer 创建 API 服务器实例
-func NewServer(tm *task.TaskManager, authService *auth.Service, authCookieSecure bool) *Server {
+func NewServer(
+	tm *task.TaskManager,
+	authService *auth.Service,
+	authCookieSecure bool,
+	taskQuota TaskQuotaConfig,
+) *Server {
 	r := gin.Default() // 自带 Logger 和 Recovery 中间件
 
 	s := &Server{
@@ -23,6 +35,7 @@ func NewServer(tm *task.TaskManager, authService *auth.Service, authCookieSecure
 		taskManager:      tm,
 		authService:      authService,
 		authCookieSecure: authCookieSecure,
+		taskQuota:        normalizeTaskQuotaConfig(taskQuota),
 	}
 
 	s.setupRoutes()
@@ -67,4 +80,17 @@ func (s *Server) setupRoutes() {
 // Run 启动 HTTP 服务
 func (s *Server) Run(addr string) error {
 	return s.router.Run(addr)
+}
+
+func normalizeTaskQuotaConfig(cfg TaskQuotaConfig) TaskQuotaConfig {
+	if cfg.GuestMaxPages <= 0 {
+		cfg.GuestMaxPages = 20
+	}
+	if cfg.UserMaxPages <= 0 {
+		cfg.UserMaxPages = 40
+	}
+	if cfg.HardMaxPages <= 0 {
+		cfg.HardMaxPages = 100
+	}
+	return cfg
 }
