@@ -223,6 +223,27 @@ func (s *Service) Logout(ctx context.Context, rawRefreshToken string) error {
 	return nil
 }
 
+func (s *Service) Me(ctx context.Context, rawAccessToken string) (*User, error) {
+	tokenStr := strings.TrimSpace(rawAccessToken)
+	if tokenStr == "" {
+		return nil, ErrInvalidAccessToken
+	}
+
+	claims, err := s.jwt.ParseAndValidate(tokenStr, TokenTypeAccess)
+	if err != nil {
+		return nil, ErrInvalidAccessToken
+	}
+
+	user, err := s.store.GetUserByID(ctx, claims.Subject)
+	if err != nil {
+		if errors.Is(err, ErrUserNotFound) {
+			return nil, ErrInvalidAccessToken
+		}
+		return nil, err
+	}
+	return user, nil
+}
+
 func normalizeEmail(email string) (string, error) {
 	clean := strings.TrimSpace(strings.ToLower(email))
 	if clean == "" {

@@ -223,3 +223,37 @@ func TestService_LogoutIsIdempotent(t *testing.T) {
 		t.Fatalf("repeated logout should be noop, got %v", err)
 	}
 }
+
+func TestService_Me(t *testing.T) {
+	_, svc := newTestService(t)
+	ctx := context.Background()
+
+	user, err := svc.Register(ctx, "user@example.com", "password123")
+	if err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	login, err := svc.Login(ctx, "user@example.com", "password123")
+	if err != nil {
+		t.Fatalf("login: %v", err)
+	}
+
+	got, err := svc.Me(ctx, login.AccessToken)
+	if err != nil {
+		t.Fatalf("me: %v", err)
+	}
+	if got.ID != user.ID || got.Email != user.Email {
+		t.Fatalf("unexpected me result: %+v", got)
+	}
+}
+
+func TestService_MeInvalidToken(t *testing.T) {
+	_, svc := newTestService(t)
+	ctx := context.Background()
+
+	if _, err := svc.Me(ctx, ""); !errors.Is(err, ErrInvalidAccessToken) {
+		t.Fatalf("expected ErrInvalidAccessToken for empty token, got %v", err)
+	}
+	if _, err := svc.Me(ctx, "not-a-jwt"); !errors.Is(err, ErrInvalidAccessToken) {
+		t.Fatalf("expected ErrInvalidAccessToken for bad token, got %v", err)
+	}
+}

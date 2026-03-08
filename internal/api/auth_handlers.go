@@ -173,3 +173,36 @@ func (s *Server) register(c *gin.Context) {
 		},
 	})
 }
+
+// me 处理 GET /api/auth/me
+func (s *Server) me(c *gin.Context) {
+	if s.authService == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error": "auth service is not configured",
+		})
+		return
+	}
+
+	accessToken, _ := c.Cookie(accessTokenCookieName)
+	user, err := s.authService.Me(c.Request.Context(), accessToken)
+	if err != nil {
+		if errors.Is(err, auth.ErrInvalidAccessToken) {
+			clearAuthCookies(c, s.authCookieSecure)
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error": "invalid access token",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to load current user",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"user": gin.H{
+			"id":    user.ID,
+			"email": user.Email,
+		},
+	})
+}
