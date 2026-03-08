@@ -3,3 +3,5 @@
 .env
 /test
 /output
+/web/node_modules
+/data

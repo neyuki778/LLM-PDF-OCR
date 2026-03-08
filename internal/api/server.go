@@ -58,6 +58,7 @@ func (s *Server) setupRoutes() {
 
 	// 静态文件服务
 	s.router.StaticFile("/", "./web/index.html")
+	s.router.StaticFile("/auth", "./web/auth.html")
 	s.router.StaticFile("/style.css", "./web/style.css")
 	s.router.Static("/dist", "./web/dist")
 	s.router.Static("/output", "./output") // 暴露分片后的 PDF 供 LLM-API 提供商拉取
