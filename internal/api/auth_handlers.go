@@ -124,3 +124,52 @@ func (s *Server) refresh(c *gin.Context) {
 		"message": "refresh successful",
 	})
 }
+
+func (s *Server) register(c *gin.Context) {
+	if s.authService == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error": "auth service is not configured",
+		})
+		return
+	}
+
+	var req struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "invalid request body",
+		})
+		return
+	}
+
+	user, err := s.authService.Register(c.Request.Context(), req.Email, req.Password)
+	if err != nil {
+		switch {
+		case errors.Is(err, auth.ErrUserExists):
+			c.JSON(http.StatusConflict, gin.H{
+				"error": "email already registered",
+			})
+			return
+		case errors.Is(err, auth.ErrInvalidEmail), errors.Is(err, auth.ErrPasswordTooShort):
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": err.Error(),
+			})
+			return
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "failed to register",
+			})
+			return
+		}
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"message": "register successful",
+		"user": gin.H{
+			"id":    user.ID,
+			"email": user.Email,
+		},
+	})
+}

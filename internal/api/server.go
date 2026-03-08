@@ -47,6 +47,7 @@ func (s *Server) setupRoutes() {
 
 		authGroup := api.Group("/auth")
 		{
+			authGroup.POST("/register", s.register)
 			authGroup.POST("/logout", s.logout)
 			authGroup.POST("/login", s.login)
 			authGroup.POST("/refresh", s.refresh)
