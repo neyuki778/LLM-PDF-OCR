@@ -46,6 +46,7 @@ func (s *Server) setupRoutes() {
 		api.DELETE("/tasks/:id", s.deleteTask)    // 删除任务
 
 		authGroup := api.Group("/auth")
+		authGroup.Use(s.requireAuthService())
 		{
 			authGroup.POST("/register", s.register)
 			authGroup.POST("/logout", s.logout)

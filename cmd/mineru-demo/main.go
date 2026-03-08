@@ -1,13 +1,16 @@
 package main
 
 import (
+	"archive/zip"
 	"context"
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"time"
 
 	mineru "github.com/neyuki778/LLM-PDF-OCR/pkg/LLM/MinerU"
+	result "github.com/neyuki778/LLM-PDF-OCR/pkg/result"
 )
 
 func getenv(key, fallback string) string {
@@ -23,13 +26,17 @@ func main() {
 	fileURL := os.Getenv("MINERU_FILE_URL")
 	modelVersion := getenv("MINERU_MODEL_VERSION", "vlm")
 
+	if len(os.Args) > 1 {
+		fileURL = os.Args[1]
+	}
+
 	if token == "" || fileURL == "" {
-		log.Fatalf("missing env vars: MINERU_TOKEN=%t MINERU_FILE_URL=%t", token != "", fileURL != "")
+		log.Fatalf("missing input: MINERU_TOKEN=%t FILE_URL=%t (env MINERU_FILE_URL or argv)", token != "", fileURL != "")
 	}
 
 	client := mineru.NewClient(baseURL, token, baseURL)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	resp, err := client.CreateTask(ctx, mineru.CreateTaskRequest{
@@ -41,24 +48,35 @@ func main() {
 	}
 
 	fmt.Printf("Task created: %s\n", resp.Data.TaskID)
-	fmt.Println("Waiting for completion and extracting content...")
+	fmt.Println("Waiting for completion and downloading zip...")
 
-	// 使用一站式方法：等待 + 下载 + 提取
-	content, err := client.ProcessTask(ctx, resp.Data.TaskID)
+	outDir := filepath.Join("output", "mineru-demo")
+	if err := os.MkdirAll(outDir, 0755); err != nil {
+		log.Fatalf("create output dir failed: %v", err)
+	}
+
+	zipPath := filepath.Join(outDir, resp.Data.TaskID+".zip")
+	if err := client.DownloadResult(ctx, resp.Data.TaskID, zipPath); err != nil {
+		log.Fatalf("download result failed: %v", err)
+	}
+	fmt.Printf("Zip saved: %s\n", zipPath)
+
+	fmt.Println("\n=== Zip Entries ===")
+	r, err := zip.OpenReader(zipPath)
 	if err != nil {
-		log.Fatalf("process task failed: %v", err)
+		log.Fatalf("open zip failed: %v", err)
 	}
-
-	fmt.Println("\n=== Extraction Complete ===")
-	fmt.Printf("Markdown length: %d bytes\n", len(content.Markdown))
-	fmt.Printf("Layout JSON length: %d bytes\n", len(content.LayoutJSON))
-	fmt.Printf("Source PDF length: %d bytes\n", len(content.SourcePDF))
-
-	// 打印 Markdown 内容预览（前 500 字符）
-	fmt.Println("\n=== Markdown Preview ===")
-	preview := content.Markdown
-	if len(preview) > 500 {
-		preview = preview[:500] + "..."
+	for _, f := range r.File {
+		fmt.Printf("- %s (%d bytes)\n", f.Name, f.UncompressedSize64)
 	}
-	fmt.Println(preview)
+	r.Close()
+
+	extractDir := filepath.Join(outDir, resp.Data.TaskID)
+	if err := result.ExtractToDir(zipPath, extractDir); err != nil {
+		log.Fatalf("extract zip failed: %v", err)
+	}
+	fmt.Printf("\nExtracted to: %s\n", extractDir)
 }
+
+
+// https://pdf.kana.engineer/uploads/4317daf6-84bc-4568-b5ee-76efd9ad371d.pdf

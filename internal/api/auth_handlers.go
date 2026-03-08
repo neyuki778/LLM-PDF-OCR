@@ -10,13 +10,6 @@ import (
 
 // logout 处理 POST /api/auth/logout
 func (s *Server) logout(c *gin.Context) {
-	if s.authService == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "auth service is not configured",
-		})
-		return
-	}
-
 	refreshToken, _ := c.Cookie(refreshTokenCookieName)
 	if err := s.authService.Logout(c.Request.Context(), refreshToken); err != nil {
 		if errors.Is(err, auth.ErrInvalidRefreshToken) {
@@ -37,13 +30,6 @@ func (s *Server) logout(c *gin.Context) {
 
 // login 处理 POST /api/auth/login
 func (s *Server) login(c *gin.Context) {
-	if s.authService == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "auth service is not configured",
-		})
-		return
-	}
-
 	var req struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
@@ -89,13 +75,6 @@ func (s *Server) login(c *gin.Context) {
 }
 
 func (s *Server) refresh(c *gin.Context) {
-	if s.authService == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "auth service is not configured",
-		})
-		return
-	}
-
 	refreshToken, _ := c.Cookie(refreshTokenCookieName)
 	result, err := s.authService.Refresh(c.Request.Context(), refreshToken)
 	if err != nil {
@@ -126,13 +105,6 @@ func (s *Server) refresh(c *gin.Context) {
 }
 
 func (s *Server) register(c *gin.Context) {
-	if s.authService == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "auth service is not configured",
-		})
-		return
-	}
-
 	var req struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
@@ -176,13 +148,6 @@ func (s *Server) register(c *gin.Context) {
 
 // me 处理 GET /api/auth/me
 func (s *Server) me(c *gin.Context) {
-	if s.authService == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "auth service is not configured",
-		})
-		return
-	}
-
 	accessToken, _ := c.Cookie(accessTokenCookieName)
 	user, err := s.authService.Me(c.Request.Context(), accessToken)
 	if err != nil {
