@@ -8,9 +8,18 @@
   </head>
   <body>
     <main class="app">
-      <header class="hero">
-        <h1>LLM PDF OCR</h1>
-        <p>上传 PDF，生成 Markdown。</p>
+      <header class="topbar">
+        <div class="hero">
+          <h1>LLM PDF OCR</h1>
+          <p>上传 PDF，生成 Markdown。</p>
+        </div>
+        <div class="top-auth">
+          <a id="auth-link" class="link-btn" href="/auth">登录 / 注册</a>
+          <div id="auth-user" class="auth-inline hidden">
+            <span id="auth-user-email" class="value"></span>
+            <button id="logout-button">登出</button>
+          </div>
+        </div>
       </header>
 
       <section class="card">
@@ -51,6 +60,6 @@
       </section>
     </main>
 
-    <script src="dist/main.js"></script>
+    <script type="module" src="dist/main.js"></script>
   </body>
 </html>

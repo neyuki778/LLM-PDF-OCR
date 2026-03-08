@@ -18,6 +18,13 @@ body {
   gap: 24px;
 }
 
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
 .hero h1 {
   margin: 0 0 8px;
   font-size: 32px;
@@ -80,6 +87,24 @@ button:active {
   transform: scale(0.98);
 }
 
+.link-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #d0d0d7;
+  border-radius: 10px;
+  padding: 10px 14px;
+  background: #fff;
+  color: #111;
+  text-decoration: none;
+  font-size: 14px;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.link-btn:hover {
+  background: #f2f2f7;
+}
+
 .primary {
   background: #007aff;
   color: #fff;
@@ -125,6 +150,42 @@ button:active {
   color: #d33;
 }
 
+.top-auth {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.auth-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.auth-form input {
+  border: 1px solid #d0d0d7;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+}
+
+.auth-form input:focus {
+  outline: none;
+  border-color: #007aff;
+}
+
+.auth-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .query {
   display: flex;
   gap: 8px;
@@ -145,4 +206,15 @@ button:active {
 
 .hidden {
   display: none;
+}
+
+@media (max-width: 640px) {
+  .topbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .top-auth {
+    justify-content: flex-start;
+  }
 }

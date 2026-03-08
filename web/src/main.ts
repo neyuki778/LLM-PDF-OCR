@@ -1,4 +1,10 @@
+export {}
+
 type TaskStatus = "pending" | "processing" | "completed" | "failed" | string
+type CurrentUser = {
+  id: string
+  email: string
+}
 
 const uploadZone = document.getElementById("upload-zone") as HTMLDivElement
 const selectButton = document.getElementById("select-button") as HTMLButtonElement
@@ -12,12 +18,99 @@ const resultLink = document.getElementById("result-link") as HTMLAnchorElement
 const queryInput = document.getElementById("query-input") as HTMLInputElement
 const queryButton = document.getElementById("query-button") as HTMLButtonElement
 const queryMessage = document.getElementById("query-message") as HTMLParagraphElement
+const authLink = document.getElementById("auth-link") as HTMLAnchorElement
+const authUser = document.getElementById("auth-user") as HTMLDivElement
+const authUserEmail = document.getElementById("auth-user-email") as HTMLSpanElement
+const logoutButton = document.getElementById("logout-button") as HTMLButtonElement
 
 let pollTimer: number | undefined
+let refreshPromise: Promise<boolean> | null = null
 
 const setMessage = (el: HTMLParagraphElement, message: string, isError = false) => {
   el.textContent = message
   el.classList.toggle("error", isError)
+}
+
+const setCurrentUser = (user: CurrentUser | null) => {
+  if (user) {
+    authUserEmail.textContent = user.email
+    authLink.classList.add("hidden")
+    authUser.classList.remove("hidden")
+    return
+  }
+  authUserEmail.textContent = ""
+  authUser.classList.add("hidden")
+  authLink.classList.remove("hidden")
+}
+
+const refreshSessionSilently = async () => {
+  if (refreshPromise) {
+    return refreshPromise
+  }
+  refreshPromise = (async () => {
+    try {
+      const res = await fetch("/api/auth/refresh", {
+        method: "POST",
+        credentials: "include",
+      })
+      if (!res.ok) {
+        setCurrentUser(null)
+        return false
+      }
+      return true
+    } catch (_) {
+      setCurrentUser(null)
+      return false
+    }
+  })().finally(() => {
+    refreshPromise = null
+  })
+  return refreshPromise
+}
+
+const fetchWithAutoRefresh = async (url: string, init: RequestInit = {}, canRetry = true) => {
+  const res = await fetch(url, {
+    ...init,
+    credentials: "include",
+  })
+  if (res.status === 401 && canRetry && url !== "/api/auth/refresh") {
+    const refreshed = await refreshSessionSilently()
+    if (refreshed) {
+      return fetchWithAutoRefresh(url, init, false)
+    }
+  }
+  return res
+}
+
+const loadCurrentUser = async () => {
+  try {
+    const res = await fetchWithAutoRefresh("/api/auth/me")
+    if (!res.ok) {
+      setCurrentUser(null)
+      return
+    }
+    const data = await res.json()
+    const user = data?.user as CurrentUser | undefined
+    if (!user || typeof user.email !== "string") {
+      setCurrentUser(null)
+      return
+    }
+    setCurrentUser(user)
+  } catch (_) {
+    setCurrentUser(null)
+  }
+}
+
+const handleLogout = async () => {
+  try {
+    await fetch("/api/auth/logout", {
+      method: "POST",
+      credentials: "include",
+    })
+  } catch (_) {
+    // ignore network error
+  }
+  setCurrentUser(null)
 }
 
 const setCurrentTask = (taskId: string) => {
@@ -43,8 +136,11 @@ const normalizeStatus = (status: TaskStatus) => status.toLowerCase()
 
 const fetchStatus = async (taskId: string) => {
   try {
-    const res = await fetch(`/api/tasks/${encodeURIComponent(taskId)}`)
+    const res = await fetchWithAutoRefresh(`/api/tasks/${encodeURIComponent(taskId)}`)
     if (!res.ok) {
+      if (res.status === 401) {
+        throw new Error("登录已过期，请重新登录。")
+      }
       throw new Error(`状态查询失败: ${res.status}`)
     }
     const data = await res.json()
@@ -84,11 +180,14 @@ const uploadFile = async (file: File) => {
   try {
     const formData = new FormData()
     formData.append("file", file)
-    const res = await fetch("/api/tasks", {
+    const res = await fetchWithAutoRefresh("/api/tasks", {
       method: "POST",
       body: formData,
     })
     if (!res.ok) {
+      if (res.status === 401) {
+        throw new Error("登录已过期，请重新登录。")
+      }
       throw new Error(`上传失败: ${res.status}`)
     }
     const data = await res.json()
@@ -132,6 +231,10 @@ uploadZone.addEventListener("drop", (event) => {
   handleFiles(event.dataTransfer?.files ?? null)
 })
 
+logoutButton.addEventListener("click", () => {
+  void handleLogout()
+})
+
 selectButton.addEventListener("click", () => {
   fileInput.click()
 })
@@ -153,3 +256,5 @@ queryButton.addEventListener("click", async () => {
     startPolling(taskId)
   }
 })
+
+void loadCurrentUser()
