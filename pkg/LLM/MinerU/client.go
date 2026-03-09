@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -132,6 +133,23 @@ func (c *Client) ProcessPDF(ctx context.Context, pdfPath string) (string, error)
 	relative := strings.TrimPrefix(cleanPath, outputPrefix)
 	publicBase := strings.TrimRight(c.PublicURL, "/")
 	pdfURL := publicBase + "/output/" + filepath.ToSlash(relative)
+
+	stat, statErr := os.Stat(cleanPath)
+	if statErr != nil {
+		log.Printf(
+			"[mineru] submit debug local_path=%s stat_err=%v public_pdf_url=%s",
+			cleanPath,
+			statErr,
+			pdfURL,
+		)
+	} else {
+		log.Printf(
+			"[mineru] submit debug local_path=%s exists=true size_bytes=%d public_pdf_url=%s",
+			cleanPath,
+			stat.Size(),
+			pdfURL,
+		)
+	}
 
 	// 2. 创建 MinerU 任务
 	createResp, err := c.CreateTask(ctx, CreateTaskRequest{
