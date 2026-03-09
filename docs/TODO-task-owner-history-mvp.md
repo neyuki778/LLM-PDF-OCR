@@ -65,19 +65,19 @@
 ## 6. 实施 TODO
 
 1. 数据模型与存储
-- [ ] `TaskRecord` 增加 `owner_user_id`
-- [ ] `SaveTask/GetTask` 序列化兼容新字段
-- [ ] 新增 user history 索引读写（`ZADD/ZREVRANGEBYSCORE`）
+- [x] `TaskRecord` 增加 `owner_user_id`
+- [x] `SaveTask/GetTask` 序列化兼容新字段
+- [x] 新增 user history 索引读写（`ZADD/ZREVRANGEBYSCORE`）
 
 2. 任务创建写入链路
-- [ ] `createTask` 获取当前 `userID`
-- [ ] 创建成功后写入 owner 与 user history 索引
-- [ ] 写入失败时记录日志（不影响主流程或按需失败返回，MVP 先明确策略）
+- [x] `createTask` 获取当前 `userID`
+- [x] 创建成功后写入 owner 与 user history 索引
+- [x] 写入失败时记录日志（不影响主流程或按需失败返回，MVP 先明确策略）
 
 3. 查询鉴权链路
-- [ ] 在 `getTask/getResult` 中统一做 owner 校验
-- [ ] 无 access 但有 refresh 的场景维持 `401`（配合前端自动 refresh）
-- [ ] 非 owner 返回 `404`（或 `403`，二选一）
+- [x] 在 `getTask/getResult` 中统一做 owner 校验
+- [x] 无 access 但有 refresh 的场景维持 `401`（配合前端自动 refresh）
+- [x] 非 owner 返回 `404`（或 `403`，二选一）
 
 4. 历史任务 API
 - [ ] 新增 `GET /api/tasks/history`

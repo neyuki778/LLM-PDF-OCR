@@ -124,6 +124,9 @@ func (s *Server) getTask(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "task not found"})
 		return
 	}
+	if !s.authorizeTaskOwner(c, taskID, parentTask.OwnerUserID, "getTask") {
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"task_id":         taskID,
@@ -139,6 +142,9 @@ func (s *Server) getResult(c *gin.Context) {
 
 	if parentTask == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "task not found"})
+		return
+	}
+	if !s.authorizeTaskOwner(c, taskID, parentTask.OwnerUserID, "getResult") {
 		return
 	}
 
@@ -208,6 +214,61 @@ func (s *Server) resolveTaskTier(c *gin.Context) (tier string, userID string, ma
 	}
 
 	return "user", user.ID, s.taskQuota.UserMaxPages, 0, ""
+}
+
+func (s *Server) authorizeTaskOwner(c *gin.Context, taskID, ownerUserID, scene string) bool {
+	owner := strings.TrimSpace(ownerUserID)
+	if owner == "" {
+		return true
+	}
+
+	requesterUserID, statusCode, errMsg := s.resolveRequesterUserID(c, scene)
+	if statusCode != 0 {
+		c.JSON(statusCode, gin.H{"error": errMsg})
+		return false
+	}
+	if requesterUserID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+		return false
+	}
+	if requesterUserID != owner {
+		log.Printf("[authz] task owner mismatch scene=%s task_id=%s owner_user_id=%s requester_user_id=%s ip=%s", scene, taskID, owner, requesterUserID, c.ClientIP())
+		c.JSON(http.StatusNotFound, gin.H{"error": "task not found"})
+		return false
+	}
+	return true
+}
+
+func (s *Server) resolveRequesterUserID(c *gin.Context, scene string) (userID string, statusCode int, errMsg string) {
+	if s.authService == nil {
+		return "", 0, ""
+	}
+
+	accessToken, err := c.Cookie(accessTokenCookieName)
+	if err != nil || strings.TrimSpace(accessToken) == "" {
+		refreshToken, refreshErr := c.Cookie(refreshTokenCookieName)
+		if refreshErr == nil && strings.TrimSpace(refreshToken) != "" {
+			log.Printf("[auth] access token missing but refresh token exists on %s ip=%s", scene, c.ClientIP())
+			return "", http.StatusUnauthorized, "access token missing"
+		}
+		return "", 0, ""
+	}
+
+	user, err := s.authService.Me(c.Request.Context(), accessToken)
+	if err != nil {
+		if errors.Is(err, auth.ErrInvalidAccessToken) {
+			refreshToken, refreshErr := c.Cookie(refreshTokenCookieName)
+			if refreshErr == nil && strings.TrimSpace(refreshToken) != "" {
+				log.Printf("[auth] invalid access token with refresh token on %s ip=%s", scene, c.ClientIP())
+				return "", http.StatusUnauthorized, "invalid access token"
+			}
+			log.Printf("[auth] invalid access token on %s ip=%s", scene, c.ClientIP())
+			return "", 0, ""
+		}
+		log.Printf("[auth] verify login status failed on %s ip=%s err=%v", scene, c.ClientIP(), err)
+		return "", http.StatusInternalServerError, "failed to verify login status"
+	}
+	return user.ID, 0, ""
 }
 
 func (s *Server) cleanupUploadedFile(path, reason string) {
