@@ -13,7 +13,6 @@ import (
 	"github.com/google/uuid"
 	auth "github.com/neyuki778/LLM-PDF-OCR/internal/auth"
 	"github.com/neyuki778/LLM-PDF-OCR/internal/task"
-	pdf "github.com/neyuki778/LLM-PDF-OCR/pkg/pdf"
 )
 
 // createTask 处理 POST /api/tasks - 上传 PDF 并创建任务
@@ -60,39 +59,28 @@ func (s *Server) createTask(c *gin.Context) {
 		return
 	}
 
-	totalPages, err := pdf.GetPageCount(savePath)
-	if err != nil {
-		_ = os.Remove(savePath)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "failed to read PDF page count",
-		})
-		return
-	}
-
 	effectiveMaxPages := maxPages
 	if s.taskQuota.HardMaxPages > 0 && effectiveMaxPages > s.taskQuota.HardMaxPages {
 		effectiveMaxPages = s.taskQuota.HardMaxPages
 	}
-	if totalPages > effectiveMaxPages {
-		_ = os.Remove(savePath)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":       fmt.Sprintf("PDF has %d pages, exceeds max %d pages for %s tier", totalPages, effectiveMaxPages, tier),
-			"tier":        tier,
-			"total_pages": totalPages,
-			"max_pages":   effectiveMaxPages,
-		})
-		return
-	}
 
 	// 5. 调用 TaskManager 创建任务
-	taskID, err := s.taskManager.CreateTask(savePath)
+	taskID, err := s.taskManager.CreateTaskWithOptions(savePath, task.CreateTaskOptions{
+		MaxPages: effectiveMaxPages,
+	})
 	if err != nil {
 		_ = os.Remove(savePath)
-		status := http.StatusInternalServerError
-		if isPageLimitErr(err) {
-			status = http.StatusBadRequest
+		var pageLimitErr *task.PageLimitExceededError
+		if errors.As(err, &pageLimitErr) {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":       fmt.Sprintf("PDF has %d pages, exceeds max %d pages for %s tier", pageLimitErr.TotalPages, pageLimitErr.MaxPages, tier),
+				"tier":        tier,
+				"total_pages": pageLimitErr.TotalPages,
+				"max_pages":   pageLimitErr.MaxPages,
+			})
+			return
 		}
-		c.JSON(status, gin.H{
+		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": fmt.Sprintf("failed to create task: %v", err),
 		})
 		return
@@ -199,12 +187,4 @@ func (s *Server) resolveTaskTier(c *gin.Context) (tier string, maxPages int, sta
 	}
 
 	return "user", s.taskQuota.UserMaxPages, 0, ""
-}
-
-func isPageLimitErr(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "total pages") && strings.Contains(msg, "should less than")
 }

@@ -37,16 +37,22 @@ type TaskManager struct {
 	redisStore *redis.RedisStore
 }
 
+type CreateTaskOptions struct {
+	MaxPages int
+}
+
+const defaultCreateTaskMaxPages = 30
+
 func NewTaskManager(workCount int, config llm.Config, redisStore *redis.RedisStore) (*TaskManager, error) {
 	processor, err := llm.NewProcessor(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create processor: %w", err)
 	}
 	return &TaskManager{
-		tasks:    make(map[string]*ParentTask),
-		pool:     worker.NewWorkerPool(workCount, processor),
-		config:   config,
-		stopChan: make(chan struct{}),
+		tasks:      make(map[string]*ParentTask),
+		pool:       worker.NewWorkerPool(workCount, processor),
+		config:     config,
+		stopChan:   make(chan struct{}),
 		redisStore: redisStore,
 	}, nil
 }
@@ -123,8 +129,15 @@ func (tm *TaskManager) handleResult(signal *worker.CompletionSignal) error {
 	return nil
 }
 
-// 完整的任务创建功能, 包含pdf切分
+// CreateTask 保留向后兼容，默认最大页数为 defaultCreateTaskMaxPages。
 func (tm *TaskManager) CreateTask(pdfPath string) (taskID string, err error) {
+	return tm.CreateTaskWithOptions(pdfPath, CreateTaskOptions{
+		MaxPages: defaultCreateTaskMaxPages,
+	})
+}
+
+// CreateTaskWithOptions 完整的任务创建功能，包含 PDF 切分。
+func (tm *TaskManager) CreateTaskWithOptions(pdfPath string, options CreateTaskOptions) (taskID string, err error) {
 	taskID = uuid.New().String()
 	workDir := filepath.Join("./output/", taskID)
 
@@ -136,9 +149,16 @@ func (tm *TaskManager) CreateTask(pdfPath string) (taskID string, err error) {
 	if err != nil {
 		return taskID, err
 	}
-	maxPageCount := 30
-	if totalPages >= maxPageCount {
-		return "", fmt.Errorf("Total pages: %d should less than %d", totalPages, maxPageCount)
+
+	maxPageCount := options.MaxPages
+	if maxPageCount <= 0 {
+		maxPageCount = defaultCreateTaskMaxPages
+	}
+	if totalPages > maxPageCount {
+		return "", &PageLimitExceededError{
+			TotalPages: totalPages,
+			MaxPages:   maxPageCount,
+		}
 	}
 
 	// 目前固定每个PDF最大2页
