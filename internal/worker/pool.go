@@ -2,7 +2,9 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log"
 	"math"
 	"os"
 	"path/filepath"
@@ -11,6 +13,8 @@ import (
 
 	llm "github.com/neyuki778/LLM-PDF-OCR/pkg/LLM"
 )
+
+const defaultSubTaskTimeout = 8 * time.Minute
 
 // 初始化worker pool
 func NewWorkerPool(workerCount int, processor llm.PDFProcessor) *WorkerPool {
@@ -22,6 +26,7 @@ func NewWorkerPool(workerCount int, processor llm.PDFProcessor) *WorkerPool {
 		taskQueue:   make(chan *SubTask, 100),
 		resultChan:  make(chan *CompletionSignal, 10),
 		processor:   processor,
+		taskTimeout: defaultSubTaskTimeout,
 		ctx:         ctx,
 		cancel:      cancel,
 		wg:          sync.WaitGroup{},
@@ -73,15 +78,38 @@ func (wp *WorkerPool) processTask(task *SubTask) {
 		task.MaxRetries = 3
 	}
 
+	taskCtx, cancel := context.WithTimeout(wp.ctx, wp.taskTimeout)
+	defer cancel()
+
 	var content string
 	var err error
 	for ; task.RetryCount < task.MaxRetries; task.RetryCount++ {
-		content, err = wp.processor.ProcessPDF(wp.ctx, task.PDFPath)
+		if taskCtx.Err() != nil {
+			err = taskCtx.Err()
+			break
+		}
+		attempt := task.RetryCount + 1
+		content, err = wp.processor.ProcessPDF(taskCtx, task.PDFPath)
 		if err == nil {
 			break
 		}
+		log.Printf(
+			"[worker] subtask attempt failed parent_id=%s subtask_id=%s attempt=%d/%d err=%v",
+			task.ParentID,
+			task.ID,
+			attempt,
+			task.MaxRetries,
+			err,
+		)
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+			break
+		}
 		// 指数退避
-		time.Sleep(time.Duration(math.Pow(2, float64(task.RetryCount))) * time.Second)
+		backoff := time.Duration(math.Pow(2, float64(task.RetryCount))) * time.Second
+		if !sleepWithContext(taskCtx, backoff) {
+			err = taskCtx.Err()
+			break
+		}
 	}
 
 	signal := &CompletionSignal{
@@ -91,6 +119,9 @@ func (wp *WorkerPool) processTask(task *SubTask) {
 
 	// 多次尝试失败
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			err = fmt.Errorf("subtask timeout after %s: %w", wp.taskTimeout, err)
+		}
 		signal.Success = false
 		signal.Error = err
 		wp.resultChan <- signal
@@ -126,6 +157,21 @@ func (wp *WorkerPool) processTask(task *SubTask) {
 	signal.Success = true
 	signal.Error = nil
 	wp.resultChan <- signal
+}
+
+func sleepWithContext(ctx context.Context, d time.Duration) bool {
+	if d <= 0 {
+		return true
+	}
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
 }
 
 // GetStatus 返回 WorkerPool 当前状态

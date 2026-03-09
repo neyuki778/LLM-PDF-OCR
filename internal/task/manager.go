@@ -98,6 +98,9 @@ func (tm *TaskManager) handleResult(signal *worker.CompletionSignal) error {
 	if !exists {
 		return fmt.Errorf("%s don't exists!", signal.ParentID)
 	}
+	if !signal.Success {
+		log.Printf("[task] subtask failed parent_id=%s subtask_id=%s err=%v", signal.ParentID, signal.SubTaskID, signal.Error)
+	}
 
 	if err := parentTask.OnSubTaskComplete(signal); err != nil {
 		return err

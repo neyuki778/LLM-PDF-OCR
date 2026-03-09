@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"sync"
+	"time"
 
 	llm "github.com/neyuki778/LLM-PDF-OCR/pkg/LLM"
 )
@@ -30,6 +31,7 @@ type WorkerPool struct {
 	taskQueue   chan *SubTask          // 任务队列（容量100）
 	resultChan  chan *CompletionSignal // 结果通道（容量10）
 	processor   llm.PDFProcessor       // 可选的LLM API客户端
+	taskTimeout time.Duration          // 单个子任务处理超时
 	ctx         context.Context        // 上下文
 	cancel      context.CancelFunc     // 取消函数
 	wg          sync.WaitGroup         // 等待所有worker退出

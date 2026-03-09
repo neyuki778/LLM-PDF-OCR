@@ -83,6 +83,7 @@ func (c *Client) GetTask(ctx context.Context, taskID string) (*GetTaskResponse, 
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		return nil, err
 	}
+	normalizeGetTaskResponse(&out)
 	if out.Code != 0 {
 		return &out, fmt.Errorf("mineru get failed: code=%d msg=%s trace_id=%s", out.Code, out.Msg, out.TraceID)
 	}
@@ -108,7 +109,7 @@ func (c *Client) WaitForCompletion(ctx context.Context, taskID string) (*GetTask
 				task.Data.ProgressInfo.TotalPages,
 				task.Data.State)
 
-			switch task.Data.State {
+			switch strings.TrimSpace(task.Data.State) {
 			case "done":
 				return task, nil
 			case "failed":
@@ -168,4 +169,42 @@ func (c *Client) ProcessPDF(ctx context.Context, pdfPath string) (string, error)
 	}
 
 	return markdown, nil
+}
+
+func normalizeGetTaskResponse(task *GetTaskResponse) {
+	if task == nil || strings.TrimSpace(task.Data.State) != "" {
+		return
+	}
+
+	raw := bytes.TrimSpace(task.Data.ExtractResult)
+	if len(raw) == 0 || string(raw) == "null" {
+		return
+	}
+
+	var single ExtractResult
+	if err := json.Unmarshal(raw, &single); err == nil {
+		applyExtractResult(task, &single)
+		return
+	}
+
+	var many []ExtractResult
+	if err := json.Unmarshal(raw, &many); err == nil && len(many) > 0 {
+		applyExtractResult(task, &many[0])
+	}
+}
+
+func applyExtractResult(task *GetTaskResponse, item *ExtractResult) {
+	if task == nil || item == nil {
+		return
+	}
+	if task.Data.TaskID == "" {
+		task.Data.TaskID = item.TaskID
+	}
+	if task.Data.DataID == "" {
+		task.Data.DataID = item.DataID
+	}
+	task.Data.State = item.State
+	task.Data.FullZipURL = item.FullZipURL
+	task.Data.ErrMsg = item.ErrMsg
+	task.Data.ProgressInfo = item.ProgressInfo
 }
