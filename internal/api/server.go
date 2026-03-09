@@ -52,6 +52,7 @@ func (s *Server) setupRoutes() {
 
 		// Phase 4.1
 		api.POST("/tasks", s.createTask) // 上传 PDF，创建任务
+		api.GET("/tasks/history", s.getTaskHistory)
 		api.GET("/tasks/:id", s.getTask) // 查询任务状态
 
 		// Phase 4.2

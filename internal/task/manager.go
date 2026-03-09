@@ -42,6 +42,12 @@ type CreateTaskOptions struct {
 	OwnerUserID string
 }
 
+type TaskHistoryItem struct {
+	TaskID    string
+	Status    string
+	CreatedAt time.Time
+}
+
 const defaultCreateTaskMaxPages = 30
 
 func NewTaskManager(workCount int, config llm.Config, redisStore *redis.RedisStore) (*TaskManager, error) {
@@ -298,6 +304,31 @@ func (tm *TaskManager) GetTask(taskID string) *ParentTask {
 		OutputPath:  record.ResultPath,
 		// SubTasks 等运行时信息已丢失，保持为空
 	}
+}
+
+func (tm *TaskManager) ListUserTaskHistory(userID string, cursor time.Time, limit int64) ([]TaskHistoryItem, error) {
+	if tm.redisStore == nil {
+		return nil, fmt.Errorf("redis store is not configured")
+	}
+
+	entries, err := tm.redisStore.ListUserTaskHistory(context.Background(), userID, cursor, limit)
+	if err != nil {
+		return nil, err
+	}
+
+	items := make([]TaskHistoryItem, 0, len(entries))
+	for _, entry := range entries {
+		status := StatusPending
+		if task := tm.GetTask(entry.TaskID); task != nil && strings.TrimSpace(task.Status) != "" {
+			status = task.Status
+		}
+		items = append(items, TaskHistoryItem{
+			TaskID:    entry.TaskID,
+			Status:    status,
+			CreatedAt: entry.CreatedAt,
+		})
+	}
+	return items, nil
 }
 
 func (tm *TaskManager) persistTaskCreateMetadata(parentTask *ParentTask, totalPages int) {

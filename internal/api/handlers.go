@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -158,6 +159,72 @@ func (s *Server) getResult(c *gin.Context) {
 	}
 
 	c.File(parentTask.OutputPath)
+}
+
+// getTaskHistory 处理 GET /api/tasks/history - 获取当前登录用户历史任务
+func (s *Server) getTaskHistory(c *gin.Context) {
+	userID, statusCode, errMsg := s.resolveRequesterUserID(c, "getTaskHistory")
+	if statusCode != 0 {
+		c.JSON(statusCode, gin.H{"error": errMsg})
+		return
+	}
+	if strings.TrimSpace(userID) == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+		return
+	}
+
+	limit := 20
+	limitRaw := strings.TrimSpace(c.Query("limit"))
+	if limitRaw != "" {
+		parsed, err := strconv.Atoi(limitRaw)
+		if err != nil || parsed <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid limit"})
+			return
+		}
+		if parsed > 100 {
+			parsed = 100
+		}
+		limit = parsed
+	}
+
+	var cursor time.Time
+	cursorRaw := strings.TrimSpace(c.Query("cursor"))
+	if cursorRaw != "" {
+		sec, err := strconv.ParseInt(cursorRaw, 10, 64)
+		if err != nil || sec <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid cursor"})
+			return
+		}
+		cursor = time.Unix(sec, 0).UTC()
+	}
+
+	items, err := s.taskManager.ListUserTaskHistory(userID, cursor, int64(limit))
+	if err != nil {
+		log.Printf("[task] list history failed user_id=%s err=%v", userID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list task history"})
+		return
+	}
+
+	respItems := make([]gin.H, 0, len(items))
+	for _, item := range items {
+		respItems = append(respItems, gin.H{
+			"task_id":    item.TaskID,
+			"status":     item.Status,
+			"created_at": item.CreatedAt.Unix(),
+		})
+	}
+
+	resp := gin.H{
+		"items": respItems,
+		"limit": limit,
+	}
+	if len(items) == limit {
+		nextCursor := items[len(items)-1].CreatedAt.Unix() - 1
+		if nextCursor > 0 {
+			resp["next_cursor"] = nextCursor
+		}
+	}
+	c.JSON(http.StatusOK, resp)
 }
 
 // 暂不支持, task manager还没有实现对应的方法
