@@ -2,7 +2,7 @@
 
 基于 Go 的高并发 PDF 文档处理服务。采用 **分片 + Worker Pool** 并发调度架构，将大文件拆解为独立子任务并行处理，在受上游 API 限流约束下实现接近线性的吞吐扩展。
 
-> 线上体验地址：**https://pdf.kana.engineer**
+> 线上体验地址：**https://pdf.neyuki.xyz**
 > 
 > MinerU 路径支持图片资产提取与 Markdown 图片链接重写，下载后的 `.md` 可直接显示图片。
 
@@ -29,7 +29,7 @@
 
 ## 🏗 系统架构
 
-![](./docs/系统架构.svg)
+![](./docs/架构图.svg)
 
 ### 技术栈
 
@@ -39,7 +39,7 @@
 | 并发调度 | goroutine + channel | Worker Pool、有界任务队列 |
 | PDF 处理 | pdfcpu | 纯 Go 实现，无 CGO 依赖 |
 | OCR 后端 | Gemini / MinerU | 接口抽象，支持多后端切换 |
-| 持久化 | Redis | 任务记录缓存，TTL 自动过期 |
+| 持久化 | Redis + SQLite | Redis 存任务与历史索引，SQLite 存用户与 refresh token |
 | 语言 | Go 1.25.4 | 编译为单一二进制，便于部署与运维 |
 
 ## 🔧 关键设计
@@ -60,34 +60,32 @@ TaskManager (Producer)              Worker Pool (Consumer)
 - **固定 Worker 数**：goroutine 池化复用，避免无限制创建协程导致资源耗尽
 - **CompletionSignal**：Worker 完成后通过 channel 回传信号，驱动 ParentTask 聚合
 
-### 两层任务模型
-
-```go
-ParentTask (用户视角)                SubTask (内部调度)
-├─ ID: "task_abc"                   ├─ 对应 PDF 的一个分片
-├─ Status: pending → processing     ├─ 独立处理，无上下文依赖
-│          → completed/failed       ├─ MaxRetries: 3
-├─ Progress: 15/20                  └─ 完成后触发聚合检查
-└─ Result: output/task_abc/result.md
-```
-
 ParentTask 面向 API 层暴露整体进度；SubTask 是调度的最小单元。全部 SubTask 完成后按页码排序聚合为最终 Markdown。
 
-### 容错与降级
+### 鉴权与权限控制
 
-- **指数退避重试**：失败后等待 2^n 秒，最多 3 次，避免 API 限流雪崩
-- **部分失败容忍**：单个分片重试耗尽后跳过，错误占位符标记缺失页码，其余内容正常输出
-- **降级优先于失败**：返回不完整但可用的结果，而非整体报错
+- **JWT 登录体系**：邮箱注册登录，Access + Refresh 双 token。
+- **Refresh Rotation**：refresh 成功后立即轮换，旧 token 作废。
+- **Cookie 会话**：HttpOnly + SameSite，前端自动 refresh。
+- **Owner 校验**：`GET /api/tasks/:id` 和 `GET /api/tasks/:id/result` 仅 owner 可访问。
 
-### 持久化策略
+### 分级额度（Quota）
+
+- 按登录态区分游客/用户额度（默认 20 / 40 页）。
+- `TASK_MAX_PAGES_HARD` 作为系统级兜底上限。
+- access 缺失但 refresh 存在时返回 401，前端可触发 refresh 后重试。
+
+### 持久化与历史任务
 
 ```
-查询请求 → 内存 Map (活跃任务) → Redis (已完成任务, TTL 5h) → 404
+查询请求 → 内存 Map (活跃任务) → Redis (任务元数据) → 404
+                 │
+                 └── user_tasks:{user_id} (ZSET 历史索引)
 ```
 
-- 处理中的任务存活于内存，零延迟访问
-- 完成后写入 Redis 并释放内存，避免内存无限增长
-- Redis 设置 TTL，自动清理过期数据
+- 创建任务时写入 `owner_user_id`。
+- 登录用户可通过 `/api/tasks/history` 查看历史任务。
+- 历史索引默认只保留最近 2000 条，防止无限增长。
 
 ### MinerU 图片链路增强
 
@@ -99,7 +97,6 @@ MinerU ZIP 结果 → 提取 images/* 到 output/{task_id}/images/
 
 - 在当前实现中，Gemini 路径以文本提取为主；MinerU 路径可返回独立图片资源。
 - 任务聚合后会自动执行图片链接重写，用户下载的 Markdown 可直接渲染图片。
-- 图片由服务端统一托管在任务输出目录下（可通过 `PUBLIC_URL` 对外访问）。
 
 ### 接口抽象
 
@@ -116,8 +113,10 @@ type PDFProcessor interface {
 ```
 internal/
 ├── api/          # HTTP 层：路由注册、请求处理、响应序列化
+├── auth/         # 认证层：用户、JWT、refresh token、SQLite store
 ├── task/         # 调度层：TaskManager、ParentTask、SubTask、状态机
-└── worker/       # 并发层：Worker Pool、有界队列、重试策略
+├── worker/       # 并发层：Worker Pool、有界队列、重试策略
+└── store/redis/  # Redis 任务存储与历史索引
 
 pkg/
 ├── LLM/          # LLM 后端抽象层
@@ -148,36 +147,49 @@ go run ./cmd/server/main.go
 # API: http://localhost:8080/api/tasks
 ```
 
-### `.env.example` 关键配置
+### `.env.example` 关键配置（精简）
 
 ```bash
-GEMINI_API_KEY=your_gemini_api_key_here
-LLM_PROVIDER=mineru                   # gemini | mineru
-GEMINI_MODEL=gemini-3-flash-preview
+# OCR
+LLM_PROVIDER=mineru                  # gemini | mineru
+GEMINI_API_KEY=...
+MINERU_TOKEN=...
+PUBLIC_URL=https://your-domain
 
-# 仅 mineru 需要
-PUBLIC_URL=https://pdf.kana.engineer  # 也可以用服务器公网 IP，例如 http://1.2.3.4:8080
-MINERU_TOKEN=your_mineru_token_here
-MINERU_BASE_URL=https://mineru.net
-MINERU_MODEL_VERSION=vlm
-
-# docker-compose 默认映射 6677:6379
+# Redis
 REDIS_ADDRESS=localhost:6677
+
+# Auth（JWT_SECRET 非空时启用）
+JWT_SECRET=...
+SQLITE_PATH=./data/app.db
+AUTH_COOKIE_SECURE=false
+
+# Quota
+TASK_MAX_PAGES_GUEST=20
+TASK_MAX_PAGES_USER=40
+TASK_MAX_PAGES_HARD=100
 ```
 
-- `PUBLIC_URL` 仅在 `LLM_PROVIDER=mineru` 时必填，用于让 MinerU 回调/拉取可访问的 PDF 地址。
-- `PUBLIC_URL` 可以是域名，也可以是服务器公网 IP + 端口（如 `http://1.2.3.4:8080`），请确保外网可访问，且不要带结尾 `/`。
-- 如果你使用 `LLM_PROVIDER=gemini`，可以忽略 `PUBLIC_URL` 和 `MINERU_*` 配置。
-- 当前线上地址：`https://pdf.kana.engineer`
-
 ## 🌐 HTTP API
+
+### Task
 
 | 方法 | 端点 | 说明 |
 |------|------|------|
 | `POST` | `/api/tasks` | 上传 PDF，创建任务，返回 `task_id` |
-| `GET` | `/api/tasks/:id` | 查询任务状态与进度 |
-| `GET` | `/api/tasks/:id/result` | 获取 Markdown 文件（任务未完成时返回状态信息） |
-| `DELETE` | `/api/tasks/:id` | 删除任务（暂未实现，当前返回 501） |
+| `GET` | `/api/tasks/history` | 当前登录用户历史任务 |
+| `GET` | `/api/tasks/:id` | 查询任务状态与进度（owner 校验） |
+| `GET` | `/api/tasks/:id/result` | 获取 Markdown 文件（owner 校验） |
+
+### Auth
+
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| `POST` | `/api/auth/register` | 邮箱注册 |
+| `POST` | `/api/auth/login` | 登录并下发 cookie |
+| `POST` | `/api/auth/refresh` | 刷新 access/refresh |
+| `POST` | `/api/auth/logout` | 登出并清理 cookie |
+| `GET` | `/api/auth/me` | 获取当前登录用户 |
 
 ```bash
 # 上传
