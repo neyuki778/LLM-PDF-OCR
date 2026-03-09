@@ -146,8 +146,69 @@ button:active {
   color: #777;
 }
 
+.hint.strong {
+  font-size: 14px;
+  line-height: 1.55;
+}
+
 .hint.error {
   color: #d33;
+}
+
+.tip-card {
+  border: 1px solid #d9e8ff;
+  background: #f7fbff;
+}
+
+.history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.history-head h2 {
+  margin: 0;
+}
+
+.history-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid #ececf1;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #fcfcfd;
+}
+
+.history-main {
+  min-width: 0;
+}
+
+.history-id {
+  display: block;
+  font-weight: 600;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-meta {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  color: #6e6e73;
 }
 
 .top-auth {

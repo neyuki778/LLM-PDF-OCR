@@ -14,22 +14,134 @@ const authLink = document.getElementById("auth-link");
 const authUser = document.getElementById("auth-user");
 const authUserEmail = document.getElementById("auth-user-email");
 const logoutButton = document.getElementById("logout-button");
+const authBenefitText = document.getElementById("auth-benefit-text");
+const historyCard = document.getElementById("history-card");
+const historyHint = document.getElementById("history-hint");
+const historyList = document.getElementById("history-list");
+const historyRefreshButton = document.getElementById("history-refresh-button");
 let pollTimer;
 let refreshPromise = null;
+let currentUser = null;
 const setMessage = (el, message, isError = false) => {
     el.textContent = message;
     el.classList.toggle("error", isError);
 };
+const setAuthBenefit = (user) => {
+    if (user) {
+        authBenefitText.textContent = "已登录：历史任务会自动保存。登录用户单次额度更高（最多 40 页），并可使用额外功能。";
+        return;
+    }
+    authBenefitText.textContent = "游客模式不保存历史任务记录。登录 / 注册后可获得更高额度（单次最多 40 页）并使用历史任务等额外功能。";
+};
+const clearHistoryList = () => {
+    historyList.innerHTML = "";
+};
+const formatStatus = (status) => {
+    const normalized = status.toLowerCase();
+    if (normalized === "completed")
+        return "已完成";
+    if (normalized === "processing")
+        return "处理中";
+    if (normalized === "pending")
+        return "排队中";
+    if (normalized === "failed")
+        return "失败";
+    return status;
+};
+const formatUnixTime = (sec) => {
+    if (!Number.isFinite(sec) || sec <= 0) {
+        return "-";
+    }
+    return new Date(sec * 1000).toLocaleString("zh-CN", { hour12: false });
+};
+const normalizeStatus = (status) => status.toLowerCase();
+const runTaskQuery = async (taskId) => {
+    if (!taskId) {
+        setMessage(queryMessage, "请输入 Task ID。", true);
+        return;
+    }
+    setMessage(queryMessage, "");
+    setCurrentTask(taskId);
+    const status = await fetchStatus(taskId);
+    if (status && status !== "completed" && status !== "success" && status !== "done" && status !== "failed") {
+        startPolling(taskId);
+    }
+};
+const renderHistoryList = (items) => {
+    clearHistoryList();
+    for (const item of items) {
+        const li = document.createElement("li");
+        li.className = "history-item";
+        const left = document.createElement("div");
+        left.className = "history-main";
+        const id = document.createElement("span");
+        id.className = "history-id";
+        id.textContent = item.task_id;
+        const meta = document.createElement("span");
+        meta.className = "history-meta";
+        meta.textContent = `${formatStatus(item.status)} · ${formatUnixTime(item.created_at)}`;
+        left.append(id, meta);
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = "查看";
+        btn.addEventListener("click", () => {
+            queryInput.value = item.task_id;
+            setMessage(queryMessage, "已从历史任务载入。");
+            void runTaskQuery(item.task_id);
+        });
+        li.append(left, btn);
+        historyList.appendChild(li);
+    }
+};
+const loadTaskHistory = async () => {
+    if (!currentUser) {
+        clearHistoryList();
+        setMessage(historyHint, "登录后可查看历史任务。");
+        return;
+    }
+    setMessage(historyHint, "正在加载历史任务...");
+    try {
+        const res = await fetchWithAutoRefresh("/api/tasks/history?limit=20");
+        if (!res.ok) {
+            if (res.status === 401) {
+                setCurrentUser(null);
+                return;
+            }
+            throw new Error(`历史任务加载失败: ${res.status}`);
+        }
+        const data = (await res.json());
+        const items = Array.isArray(data.items) ? data.items : [];
+        if (items.length === 0) {
+            clearHistoryList();
+            setMessage(historyHint, "暂无历史任务。");
+            return;
+        }
+        renderHistoryList(items);
+        setMessage(historyHint, `已加载最近 ${items.length} 条历史任务。`);
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : "历史任务加载失败";
+        clearHistoryList();
+        setMessage(historyHint, message, true);
+    }
+};
 const setCurrentUser = (user) => {
+    currentUser = user;
+    setAuthBenefit(user);
     if (user) {
         authUserEmail.textContent = user.email;
         authLink.classList.add("hidden");
         authUser.classList.remove("hidden");
+        historyCard.classList.remove("hidden");
+        void loadTaskHistory();
         return;
     }
     authUserEmail.textContent = "";
     authUser.classList.add("hidden");
     authLink.classList.remove("hidden");
+    historyCard.classList.add("hidden");
+    clearHistoryList();
+    setMessage(historyHint, "登录后可查看历史任务。");
 };
 const refreshSessionSilently = async () => {
     if (refreshPromise) {
@@ -117,7 +229,6 @@ const startPolling = (taskId) => {
         void fetchStatus(taskId);
     }, 2000);
 };
-const normalizeStatus = (status) => status.toLowerCase();
 const fetchStatus = async (taskId) => {
     var _a, _b, _c, _d, _e;
     try {
@@ -184,6 +295,9 @@ const uploadFile = async (file) => {
         }
         setCurrentTask(taskId);
         startPolling(taskId);
+        if (currentUser) {
+            void loadTaskHistory();
+        }
         setMessage(uploadHint, "上传成功，开始处理。");
     }
     catch (err) {
@@ -218,6 +332,9 @@ uploadZone.addEventListener("drop", (event) => {
 logoutButton.addEventListener("click", () => {
     void handleLogout();
 });
+historyRefreshButton.addEventListener("click", () => {
+    void loadTaskHistory();
+});
 selectButton.addEventListener("click", () => {
     fileInput.click();
 });
@@ -226,16 +343,7 @@ fileInput.addEventListener("change", () => {
 });
 queryButton.addEventListener("click", async () => {
     const taskId = queryInput.value.trim();
-    if (!taskId) {
-        setMessage(queryMessage, "请输入 Task ID。", true);
-        return;
-    }
-    setMessage(queryMessage, "");
-    setCurrentTask(taskId);
-    const status = await fetchStatus(taskId);
-    if (status && status !== "completed" && status !== "success" && status !== "done" && status !== "failed") {
-        startPolling(taskId);
-    }
+    await runTaskQuery(taskId);
 });
 void loadCurrentUser();
 export {};

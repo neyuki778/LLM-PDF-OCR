@@ -22,6 +22,13 @@
         </div>
       </header>
 
+      <section class="card tip-card">
+        <h2>使用提示</h2>
+        <p id="auth-benefit-text" class="hint strong">
+          游客模式不保存历史任务记录。登录 / 注册后可获得更高额度（单次最多 40 页）并使用历史任务等额外功能。
+        </p>
+      </section>
+
       <section class="card">
         <h2>上传 PDF</h2>
         <div id="upload-zone" class="upload-zone">
@@ -48,6 +55,15 @@
         </div>
         <a id="result-link" class="link hidden" href="#" download>下载结果</a>
         <p id="status-message" class="hint"></p>
+      </section>
+
+      <section id="history-card" class="card hidden">
+        <div class="history-head">
+          <h2>历史任务</h2>
+          <button id="history-refresh-button" type="button">刷新</button>
+        </div>
+        <p id="history-hint" class="hint">仅登录用户可查看历史任务。</p>
+        <ul id="history-list" class="history-list"></ul>
       </section>
 
       <section class="card">
