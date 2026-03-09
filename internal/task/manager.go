@@ -38,7 +38,8 @@ type TaskManager struct {
 }
 
 type CreateTaskOptions struct {
-	MaxPages int
+	MaxPages    int
+	OwnerUserID string
 }
 
 const defaultCreateTaskMaxPages = 30
@@ -114,15 +115,18 @@ func (tm *TaskManager) handleResult(signal *worker.CompletionSignal) error {
 			// 2. 聚合成功后写入 Redis
 			ctx := context.Background()
 			record := &store.TaskRecord{
-				ID:         parentTask.ID,
-				Status:     StatusCompleted,
-				PDFPath:    parentTask.OriginalPDF,
-				ResultPath: parentTask.OutputPath,
-				CreatedAt:  time.Now(),
-				UpdatedAt:  time.Now(),
+				ID:          parentTask.ID,
+				OwnerUserID: parentTask.OwnerUserID,
+				Status:      StatusCompleted,
+				PDFPath:     parentTask.OriginalPDF,
+				ResultPath:  parentTask.OutputPath,
+				CreatedAt:   time.Now(),
+				UpdatedAt:   time.Now(),
 			}
-			if err := tm.redisStore.SaveTask(ctx, record); err != nil {
-				log.Printf("[TaskManager] Redis save failed for task %s: %v", parentTask.ID, err)
+			if tm.redisStore != nil {
+				if err := tm.redisStore.SaveTask(ctx, record); err != nil {
+					log.Printf("[TaskManager] Redis save failed for task %s: %v", parentTask.ID, err)
+				}
 			}
 		}()
 	}
@@ -132,7 +136,8 @@ func (tm *TaskManager) handleResult(signal *worker.CompletionSignal) error {
 // CreateTask 保留向后兼容，默认最大页数为 defaultCreateTaskMaxPages。
 func (tm *TaskManager) CreateTask(pdfPath string) (taskID string, err error) {
 	return tm.CreateTaskWithOptions(pdfPath, CreateTaskOptions{
-		MaxPages: defaultCreateTaskMaxPages,
+		MaxPages:    defaultCreateTaskMaxPages,
+		OwnerUserID: "",
 	})
 }
 
@@ -166,6 +171,7 @@ func (tm *TaskManager) CreateTaskWithOptions(pdfPath string, options CreateTaskO
 	totalShards := (totalPages + span - 1) / span
 
 	parentTask := NewParentTask(taskID, pdfPath, workDir)
+	parentTask.OwnerUserID = strings.TrimSpace(options.OwnerUserID)
 	parentTask.TotalShards = totalShards
 
 	// 创建并填充sub-task
@@ -205,6 +211,8 @@ func (tm *TaskManager) CreateTaskWithOptions(pdfPath string, options CreateTaskO
 	tm.mu.Lock()
 	tm.tasks[taskID] = parentTask
 	tm.mu.Unlock()
+
+	tm.persistTaskCreateMetadata(parentTask, totalPages)
 
 	return taskID, nil
 }
@@ -284,10 +292,40 @@ func (tm *TaskManager) GetTask(taskID string) *ParentTask {
 	// 注意：这是一个"只读"的 ParentTask，只包含基本信息
 	return &ParentTask{
 		ID:          record.ID,
+		OwnerUserID: record.OwnerUserID,
 		Status:      record.Status,
 		OriginalPDF: record.PDFPath,
 		OutputPath:  record.ResultPath,
 		// SubTasks 等运行时信息已丢失，保持为空
+	}
+}
+
+func (tm *TaskManager) persistTaskCreateMetadata(parentTask *ParentTask, totalPages int) {
+	if tm.redisStore == nil || parentTask == nil {
+		return
+	}
+
+	now := time.Now().UTC()
+	ctx := context.Background()
+	record := &store.TaskRecord{
+		ID:          parentTask.ID,
+		OwnerUserID: parentTask.OwnerUserID,
+		Status:      StatusPending,
+		PDFPath:     parentTask.OriginalPDF,
+		ResultPath:  parentTask.OutputPath,
+		TotalPages:  totalPages,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	if err := tm.redisStore.SaveTask(ctx, record); err != nil {
+		log.Printf("[task] save task metadata failed task_id=%s owner_user_id=%s err=%v", parentTask.ID, parentTask.OwnerUserID, err)
+		return
+	}
+	if parentTask.OwnerUserID == "" {
+		return
+	}
+	if err := tm.redisStore.AddUserTaskHistory(ctx, parentTask.OwnerUserID, parentTask.ID, now); err != nil {
+		log.Printf("[task] add user task history failed task_id=%s owner_user_id=%s err=%v", parentTask.ID, parentTask.OwnerUserID, err)
 	}
 }
 

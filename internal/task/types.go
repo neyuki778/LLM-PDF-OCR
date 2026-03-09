@@ -18,6 +18,7 @@ type SubTaskMeta struct {
 // ParentTask 父任务（对应一个完整的PDF处理请求）
 type ParentTask struct {
 	ID          string // 任务唯一ID（UUID）
+	OwnerUserID string // 任务归属用户ID，游客为空
 	OriginalPDF string // 原始PDF路径（输入）
 	WorkDir     string // 工作目录：./output/{ID}/
 	OutputPath  string // 最终结果路径：./output/{ID}/result.md

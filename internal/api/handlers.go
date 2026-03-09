@@ -67,7 +67,8 @@ func (s *Server) createTask(c *gin.Context) {
 
 	// 5. 调用 TaskManager 创建任务
 	taskID, err := s.taskManager.CreateTaskWithOptions(savePath, task.CreateTaskOptions{
-		MaxPages: effectiveMaxPages,
+		MaxPages:    effectiveMaxPages,
+		OwnerUserID: userID,
 	})
 	if err != nil {
 		s.cleanupUploadedFile(savePath, "create_task_failed")
