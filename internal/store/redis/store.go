@@ -20,6 +20,7 @@ const (
 	taskKeyPrefix      = "task:"
 	userTasksKeyPrefix = "user_tasks:"
 	defaultHistorySize = 20
+	maxUserHistorySize = 2000
 )
 
 func (s *RedisStore) GetTask(ctx context.Context, id string) (*store.TaskRecord, error) {
@@ -55,6 +56,20 @@ func (s *RedisStore) SaveTask(ctx context.Context, task *store.TaskRecord) error
 
 	return s.client.Set(ctx, key, val, s.ttl).Err()
 }
+
+// SaveTaskPersistent saves task metadata without expiration.
+func (s *RedisStore) SaveTaskPersistent(ctx context.Context, task *store.TaskRecord) error {
+	if task == nil {
+		return fmt.Errorf("task should not be nil")
+	}
+	key := taskKeyPrefix + task.ID
+	val, err := json.Marshal(task)
+	if err != nil {
+		return err
+	}
+
+	return s.client.Set(ctx, key, val, 0).Err()
+}
 func (s *RedisStore) UpdateTaskStatus(ctx context.Context, id string, status string) error {
 	if id == "" {
 		return fmt.Errorf("ID should not be empty")
@@ -69,7 +84,7 @@ func (s *RedisStore) UpdateTaskStatus(ctx context.Context, id string, status str
 	val.Status = status
 	val.UpdatedAt = time.Now()
 
-	return s.SaveTask(ctx, val)
+	return s.SaveTaskPersistent(ctx, val)
 }
 func (s *RedisStore) DeleteTask(ctx context.Context, id string) error {
 	if id == "" {
@@ -97,7 +112,20 @@ func (s *RedisStore) AddUserTaskHistory(ctx context.Context, userID, taskID stri
 		Score:  float64(createdAt.Unix()),
 		Member: taskID,
 	}
-	return s.client.ZAdd(ctx, key, member).Err()
+	if err := s.client.ZAdd(ctx, key, member).Err(); err != nil {
+		return err
+	}
+
+	// Keep only latest maxUserHistorySize records per user.
+	total, err := s.client.ZCard(ctx, key).Result()
+	if err != nil {
+		return err
+	}
+	if total <= maxUserHistorySize {
+		return nil
+	}
+	removeCount := total - maxUserHistorySize
+	return s.client.ZRemRangeByRank(ctx, key, 0, removeCount-1).Err()
 }
 
 // ListUserTaskHistory returns user's task ids in reverse chronological order.

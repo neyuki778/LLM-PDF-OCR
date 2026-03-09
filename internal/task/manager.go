@@ -120,17 +120,32 @@ func (tm *TaskManager) handleResult(signal *worker.CompletionSignal) error {
 
 			// 2. 聚合成功后写入 Redis
 			ctx := context.Background()
+			createdAt := time.Now().UTC()
+			totalPages := 0
+			ownerUserID := parentTask.OwnerUserID
+			if tm.redisStore != nil {
+				if prev, err := tm.redisStore.GetTask(ctx, parentTask.ID); err == nil && prev != nil {
+					if !prev.CreatedAt.IsZero() {
+						createdAt = prev.CreatedAt
+					}
+					totalPages = prev.TotalPages
+					if strings.TrimSpace(prev.OwnerUserID) != "" {
+						ownerUserID = prev.OwnerUserID
+					}
+				}
+			}
 			record := &store.TaskRecord{
 				ID:          parentTask.ID,
-				OwnerUserID: parentTask.OwnerUserID,
+				OwnerUserID: ownerUserID,
 				Status:      StatusCompleted,
 				PDFPath:     parentTask.OriginalPDF,
 				ResultPath:  parentTask.OutputPath,
-				CreatedAt:   time.Now(),
-				UpdatedAt:   time.Now(),
+				TotalPages:  totalPages,
+				CreatedAt:   createdAt,
+				UpdatedAt:   time.Now().UTC(),
 			}
 			if tm.redisStore != nil {
-				if err := tm.redisStore.SaveTask(ctx, record); err != nil {
+				if err := tm.redisStore.SaveTaskPersistent(ctx, record); err != nil {
 					log.Printf("[TaskManager] Redis save failed for task %s: %v", parentTask.ID, err)
 				}
 			}
@@ -348,7 +363,7 @@ func (tm *TaskManager) persistTaskCreateMetadata(parentTask *ParentTask, totalPa
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
-	if err := tm.redisStore.SaveTask(ctx, record); err != nil {
+	if err := tm.redisStore.SaveTaskPersistent(ctx, record); err != nil {
 		log.Printf("[task] save task metadata failed task_id=%s owner_user_id=%s err=%v", parentTask.ID, parentTask.OwnerUserID, err)
 		return
 	}
