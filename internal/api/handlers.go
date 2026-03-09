@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -34,7 +35,7 @@ func (s *Server) createTask(c *gin.Context) {
 		return
 	}
 
-	tier, maxPages, statusCode, tierErr := s.resolveTaskTier(c)
+	tier, userID, maxPages, statusCode, tierErr := s.resolveTaskTier(c)
 	if statusCode != 0 {
 		c.JSON(statusCode, gin.H{"error": tierErr})
 		return
@@ -69,9 +70,17 @@ func (s *Server) createTask(c *gin.Context) {
 		MaxPages: effectiveMaxPages,
 	})
 	if err != nil {
-		_ = os.Remove(savePath)
+		s.cleanupUploadedFile(savePath, "create_task_failed")
 		var pageLimitErr *task.PageLimitExceededError
 		if errors.As(err, &pageLimitErr) {
+			log.Printf(
+				"[quota] reject tier=%s user_id=%s total_pages=%d max_pages=%d ip=%s",
+				tier,
+				userID,
+				pageLimitErr.TotalPages,
+				pageLimitErr.MaxPages,
+				c.ClientIP(),
+			)
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error":       fmt.Sprintf("PDF has %d pages, exceeds max %d pages for %s tier", pageLimitErr.TotalPages, pageLimitErr.MaxPages, tier),
 				"tier":        tier,
@@ -89,6 +98,8 @@ func (s *Server) createTask(c *gin.Context) {
 	// 6. 提交任务到 WorkerPool 开始处理
 	timeOut := 5 * time.Second
 	if err := s.taskManager.SubmitTaskToPool(taskID, timeOut); err != nil {
+		s.cleanupUploadedFile(savePath, "submit_task_failed")
+		log.Printf("[task] submit failed task_id=%s tier=%s user_id=%s err=%v", taskID, tier, userID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": fmt.Sprintf("failed to submit task: %v", err),
 		})
@@ -165,26 +176,46 @@ func (s *Server) getStatus(c *gin.Context) {
 	})
 }
 
-func (s *Server) resolveTaskTier(c *gin.Context) (tier string, maxPages int, statusCode int, errMsg string) {
+func (s *Server) resolveTaskTier(c *gin.Context) (tier string, userID string, maxPages int, statusCode int, errMsg string) {
 	tier = "guest"
+	userID = ""
 	maxPages = s.taskQuota.GuestMaxPages
 
 	// Auth 未启用时，全部按 guest 处理。
 	if s.authService == nil {
-		return tier, maxPages, 0, ""
+		return tier, userID, maxPages, 0, ""
 	}
 
 	accessToken, err := c.Cookie(accessTokenCookieName)
 	if err != nil || strings.TrimSpace(accessToken) == "" {
-		return tier, maxPages, 0, ""
-	}
-
-	if _, err := s.authService.Me(c.Request.Context(), accessToken); err != nil {
-		if errors.Is(err, auth.ErrInvalidAccessToken) {
-			return "", 0, http.StatusUnauthorized, "invalid access token"
+		refreshToken, refreshErr := c.Cookie(refreshTokenCookieName)
+		if refreshErr == nil && strings.TrimSpace(refreshToken) != "" {
+			log.Printf("[auth] access token missing but refresh token exists on createTask ip=%s", c.ClientIP())
+			return "", "", 0, http.StatusUnauthorized, "access token missing"
 		}
-		return "", 0, http.StatusInternalServerError, "failed to verify login status"
+		return tier, userID, maxPages, 0, ""
 	}
 
-	return "user", s.taskQuota.UserMaxPages, 0, ""
+	user, err := s.authService.Me(c.Request.Context(), accessToken)
+	if err != nil {
+		if errors.Is(err, auth.ErrInvalidAccessToken) {
+			log.Printf("[auth] invalid access token on createTask ip=%s", c.ClientIP())
+			return "", "", 0, http.StatusUnauthorized, "invalid access token"
+		}
+		log.Printf("[auth] verify login status failed on createTask ip=%s err=%v", c.ClientIP(), err)
+		return "", "", 0, http.StatusInternalServerError, "failed to verify login status"
+	}
+
+	return "user", user.ID, s.taskQuota.UserMaxPages, 0, ""
+}
+
+func (s *Server) cleanupUploadedFile(path, reason string) {
+	if strings.TrimSpace(path) == "" {
+		return
+	}
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		log.Printf("[cleanup] remove uploaded file failed reason=%s path=%s err=%v", reason, path, err)
+		return
+	}
+	log.Printf("[cleanup] removed uploaded file reason=%s path=%s", reason, path)
 }
