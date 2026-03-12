@@ -1,0 +1,18 @@
+# 依赖缓存与构建产物
+data/redis/
+output/
+uploads/
+web/node_modules/
+
+# 敏感文件不打进镜像（运行时通过 env_file 或环境变量注入）
+.env
+
+# 不需要打进镜像的文档与测试文件
+docs/
+test/
+*.md
+!go.mod
+
+# 本地开发产物
+*.exe
+*.test

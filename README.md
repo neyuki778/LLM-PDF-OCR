@@ -132,6 +132,35 @@ cmd/
 
 ## 🚀 快速开始
 
+### 方式一：Docker（推荐）
+
+无需本地安装 Go / Redis，一条命令启动全部服务。
+
+```bash
+# 1) 复制环境变量模板并填写 API key 等配置
+cp .env.example .env
+
+# 2) 构建镜像并启动（首次会自动 build）
+docker compose up -d
+
+# 3) 查看日志
+docker compose logs -f app
+
+# 4) 访问
+# Web: http://localhost:8080
+# API: http://localhost:8080/api/tasks
+```
+
+**重新部署 / 代码更新后：**
+
+```bash
+docker compose up -d --build
+```
+
+---
+
+### 方式二：本地开发（需要 Go 1.22+）
+
 ```bash
 # 1) 复制环境变量模板
 cp .env.example .env

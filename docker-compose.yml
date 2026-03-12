@@ -7,3 +7,27 @@ services:
       - ./data/redis:/data
     ports:
       - "6677:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  app:
+    build: .
+    container_name: llm-app
+    ports:
+      - "8080:8080"
+    env_file: .env          # 加载 .env 中的 API key 等配置
+    environment:
+      # 覆盖 .env 里的 localhost 地址，容器内通过 service 名访问 redis
+      - REDIS_ADDRESS=redis:6379
+      - SQLITE_PATH=/app/data/app.db
+    volumes:
+      - ./output:/app/output   # OCR 结果持久化
+      - ./data:/app/data       # SQLite 数据库持久化
+      - ./uploads:/app/uploads # 用户上传的 PDF 临时存储
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
