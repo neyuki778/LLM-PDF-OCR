@@ -8,6 +8,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -73,6 +74,34 @@ func (wp *WorkerPool) ResultChan() <-chan *CompletionSignal {
 }
 
 func (wp *WorkerPool) processTask(task *SubTask) {
+	if task == nil {
+		log.Printf("[worker] received nil subtask, skip")
+		return
+	}
+
+	signal := &CompletionSignal{
+		SubTaskID: task.ID,
+		ParentID:  task.ParentID,
+	}
+	shouldEmit := false
+	defer func() {
+		if r := recover(); r != nil {
+			shouldEmit = true
+			signal.Success = false
+			signal.Error = fmt.Errorf("panic while processing subtask: %v", r)
+			log.Printf(
+				"[worker] panic recovered parent_id=%s subtask_id=%s panic=%v\n%s",
+				task.ParentID,
+				task.ID,
+				r,
+				debug.Stack(),
+			)
+		}
+		if shouldEmit {
+			wp.resultChan <- signal
+		}
+	}()
+
 	// 设置默认重试次数
 	if task.MaxRetries == 0 {
 		task.MaxRetries = 3
@@ -112,11 +141,6 @@ func (wp *WorkerPool) processTask(task *SubTask) {
 		}
 	}
 
-	signal := &CompletionSignal{
-		SubTaskID: task.ID,
-		ParentID:  task.ParentID,
-	}
-
 	// 多次尝试失败
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
@@ -124,7 +148,7 @@ func (wp *WorkerPool) processTask(task *SubTask) {
 		}
 		signal.Success = false
 		signal.Error = err
-		wp.resultChan <- signal
+		shouldEmit = true
 		return
 	}
 
@@ -132,7 +156,7 @@ func (wp *WorkerPool) processTask(task *SubTask) {
 	if err := os.MkdirAll(filepath.Dir(task.OutputPath), 0755); err != nil {
 		signal.Success = false
 		signal.Error = fmt.Errorf("failed to create directory: %w", err)
-		wp.resultChan <- signal
+		shouldEmit = true
 		return
 	}
 
@@ -141,7 +165,7 @@ func (wp *WorkerPool) processTask(task *SubTask) {
 	if err != nil {
 		signal.Success = false
 		signal.Error = fmt.Errorf("can't open file %s: %w", task.OutputPath, err)
-		wp.resultChan <- signal
+		shouldEmit = true
 		return
 	}
 	defer file.Close()
@@ -150,13 +174,13 @@ func (wp *WorkerPool) processTask(task *SubTask) {
 	if err != nil {
 		signal.Success = false
 		signal.Error = fmt.Errorf("failed to write content: %w", err)
-		wp.resultChan <- signal
+		shouldEmit = true
 		return
 	}
 
 	signal.Success = true
 	signal.Error = nil
-	wp.resultChan <- signal
+	shouldEmit = true
 }
 
 func sleepWithContext(ctx context.Context, d time.Duration) bool {
